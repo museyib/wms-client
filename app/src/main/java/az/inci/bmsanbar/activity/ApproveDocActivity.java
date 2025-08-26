@@ -32,6 +32,7 @@ public class ApproveDocActivity extends AppBaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.approve_doc_layout);
+        setEdgeToEdge();
         setTitle("Mal qəbulu");
 
         docListView = findViewById(R.id.doc_list);

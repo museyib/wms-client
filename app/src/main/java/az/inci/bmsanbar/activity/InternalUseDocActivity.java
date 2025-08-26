@@ -35,6 +35,7 @@ public class InternalUseDocActivity extends AppBaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.internal_use_doc_layout);
+        setEdgeToEdge();
         setTitle("Daxili istifadə");
 
         docListView = findViewById(R.id.doc_list);

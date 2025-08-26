@@ -1,11 +1,14 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
 import static android.R.drawable.ic_dialog_info;
 import static android.text.InputType.TYPE_CLASS_NUMBER;
 import static android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.content.ContentValues;
@@ -14,7 +17,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -48,15 +50,17 @@ import java.util.Map;
 import java.util.Objects;
 
 import az.inci.bmsanbar.AppConfig;
-import az.inci.bmsanbar.DBHelper;
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Doc;
 import az.inci.bmsanbar.model.ExpCenter;
 import az.inci.bmsanbar.model.Inventory;
 import az.inci.bmsanbar.model.Trx;
 import az.inci.bmsanbar.model.Whs;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
 import az.inci.bmsanbar.model.v3.InternalUseRequest;
 import az.inci.bmsanbar.model.v3.InternalUseRequestItem;
+import az.inci.bmsanbar.util.DBHelper;
 
 public class InternalUseTrxActivity extends ScannerSupportActivity {
     private RecyclerView trxListView;
@@ -84,6 +88,7 @@ public class InternalUseTrxActivity extends ScannerSupportActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.internal_use_trx_layout);
+        setEdgeToEdge();
         trxListView = findViewById(R.id.trx_list_view);
         whsListSpinner = findViewById(R.id.trg_whs_list);
         expCenterListSpinner = findViewById(R.id.exp_center_list);
@@ -188,7 +193,7 @@ public class InternalUseTrxActivity extends ScannerSupportActivity {
         uploadBtn.setOnClickListener(clickListener);
 
         scanCam.setVisibility(cameraScanning ? VISIBLE : GONE);
-        scanCam.setOnClickListener(v -> barcodeResultLauncher.launch(1));
+        scanCam.setOnClickListener(v -> openCameraScanner());
 
         getOnBackPressedDispatcher().addCallback(new OnBackPressedCallback(true) {
             @Override
@@ -314,13 +319,20 @@ public class InternalUseTrxActivity extends ScannerSupportActivity {
     private void loadWhsList() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("src", "whs", "target");
+            String url = createUrl("src", "whs", "target");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("user-id", getUser().getId());
-            url = addRequestParameters(url, parameters);
-            whsList = getListData(url, "GET", null, Whs[].class);
-            if (whsList == null) whsList = Collections.singletonList(whs);
-            runOnUiThread(this::publishWhsList);
+            parameters.put("user-id", appUser.getId());
+            url = addQueryParameters(url, parameters);
+            try {
+                whsList = httpClient.getListData(url, "GET", null, Whs[].class);
+                if (whsList == null) whsList = Collections.singletonList(whs);
+                runOnUiThread(this::publishWhsList);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
@@ -334,10 +346,17 @@ public class InternalUseTrxActivity extends ScannerSupportActivity {
 
     private void loadExpCenterList() {
         new Thread(() -> {
-            String url = url("src", "exp-center");
-            expCenterList = getListData(url, "GET", null, ExpCenter[].class);
-            if (expCenterList == null) expCenterList = Collections.singletonList(expCenter);
-            runOnUiThread(this::publishExpCenterList);
+            String url = createUrl("src", "exp-center");
+            try {
+                expCenterList = httpClient.getListData(url, "GET", null, ExpCenter[].class);
+                if (expCenterList == null) expCenterList = Collections.singletonList(expCenter);
+                runOnUiThread(this::publishExpCenterList);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
@@ -357,29 +376,43 @@ public class InternalUseTrxActivity extends ScannerSupportActivity {
     private void getInvFromServer(String barcode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "by-barcode");
+            String url = createUrl("inv", "by-barcode");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("barcode", barcode);
-            url = addRequestParameters(url, parameters);
-            Inventory currentInv = getSimpleObject(url, "GET", null, Inventory.class);
-            if (currentInv != null) runOnUiThread(() -> showAddInvDialog(currentInv));
+            url = addQueryParameters(url, parameters);
+            try {
+                Inventory currentInv = httpClient.getSimpleObject(url, "GET", null, Inventory.class);
+                if (currentInv != null) runOnUiThread(() -> showAddInvDialog(currentInv));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void loadWhsSumList() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "whs-sum");
+            String url = createUrl("inv", "whs-sum");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("user-id", getUser().getId());
+            parameters.put("user-id", appUser.getId());
             parameters.put("whs-code", whsCode);
-            url = addRequestParameters(url, parameters);
-            invList = getListData(url, "GET", null, Inventory[].class);
+            url = addQueryParameters(url, parameters);
+            try {
+                invList = httpClient.getListData(url, "GET", null, Inventory[].class);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void showInvList() {
-        View view = LayoutInflater.from(this)
+        View view = getLayoutInflater()
                 .inflate(R.layout.result_list_dialog,
                         findViewById(android.R.id.content), false);
         ListView listView = view.findViewById(R.id.result_list);
@@ -537,7 +570,7 @@ public class InternalUseTrxActivity extends ScannerSupportActivity {
         }
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("trx", "create-internal-use");
+            String url = createUrl("trx", "create-internal-use");
             List<InternalUseRequestItem> requestItems = new ArrayList<>();
             for (Trx trx : trxList) {
                 requestItems.add(InternalUseRequestItem.builder()
@@ -553,16 +586,27 @@ public class InternalUseTrxActivity extends ScannerSupportActivity {
                     .whsCode(whsCode)
                     .expCenterCode(expCenterCode)
                     .notes(notes)
-                    .userId(getUser().getId())
+                    .userId(appUser.getId())
                     .requestItems(requestItems)
                     .build();
 
-            executeUpdate(url, request, message -> {
-                if (message.getStatusCode() == 0) {
-                    dbHelper.deleteInternalUseDoc(trxNo);
-                    finish();
-                }
-            });
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, request);
+                runOnUiThread(() -> {
+                    if (message.getStatusCode() == 0) {
+                        dbHelper.deleteInternalUseDoc(trxNo);
+                        finish();
+                    } else {
+                        showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                    }
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            }
         }).start();
     }
 

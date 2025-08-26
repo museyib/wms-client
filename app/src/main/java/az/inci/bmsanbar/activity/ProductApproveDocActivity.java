@@ -1,5 +1,9 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
+import static android.R.drawable.ic_dialog_info;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -19,6 +23,7 @@ import androidx.annotation.Nullable;
 import java.util.List;
 
 import az.inci.bmsanbar.AppConfig;
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Doc;
 import az.inci.bmsanbar.model.Trx;
@@ -34,13 +39,14 @@ public class ProductApproveDocActivity extends AppBaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.product_approve_doc_layout);
+        setEdgeToEdge();
         setTitle("Mal qəbulu (İstehsalat)");
 
         docListView = findViewById(R.id.doc_list);
         add = findViewById(R.id.add);
         download = findViewById(R.id.download);
 
-        if (getUser().isApproveFlag()) download.setVisibility(View.VISIBLE);
+        if (appUser.isApproveFlag()) download.setVisibility(View.VISIBLE);
 
         add.setOnClickListener(v -> {
             Intent intent = new Intent(this, ProductApproveTrxActivity.class);
@@ -113,33 +119,45 @@ public class ProductApproveDocActivity extends AppBaseActivity {
     private void loadDocsFromServer() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv-move", "approve-prd", "trx-list");
-            List<Trx> trxList = getListData(url, "GET", null, Trx[].class);
+            String url = createUrl("inv-move", "approve-prd", "trx-list");
+            try {
+                List<Trx> trxList = httpClient.getListData(url, "GET", null, Trx[].class);
 
-            if (trxList != null)
-                if (!trxList.isEmpty())
-                    loadDocListFromServer(trxList);
-                else
-                    runOnUiThread(() -> showMessageDialog(getString(R.string.info),
-                            getString(R.string.no_data),
-                            android.R.drawable.ic_dialog_info));
+                if (trxList != null)
+                    if (!trxList.isEmpty())
+                        loadDocListFromServer(trxList);
+                    else
+                        runOnUiThread(() -> showMessageDialog(getString(R.string.info), getString(R.string.no_data), ic_dialog_info));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void loadDocListFromServer(List<Trx> trxList) {
-        String url = url("inv-move", "approve-prd", "doc-list");
-        List<Doc> docList = getListData(url, "GET", null, Doc[].class);
-        runOnUiThread(() -> {
-            for (Doc doc : docList) {
-                doc.setTrxTypeId(4);
-                dbHelper.addApproveDoc(doc);
-            }
+        String url = createUrl("inv-move", "approve-prd", "doc-list");
+        try {
+            List<Doc> docList = httpClient.getListData(url, "GET", null, Doc[].class);
+            runOnUiThread(() -> {
+                for (Doc doc : docList) {
+                    doc.setTrxTypeId(4);
+                    dbHelper.addApproveDoc(doc);
+                }
 
-            for (Trx trx : trxList) {
-                dbHelper.addApproveTrx(trx);
-            }
-            loadData();
-        });
+                for (Trx trx : trxList) {
+                    dbHelper.addApproveTrx(trx);
+                }
+                loadData();
+            });
+        } catch (CustomException e) {
+            logger.logError(e.toString());
+            runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+        } finally {
+            runOnUiThread(() -> showProgressDialog(false));
+        }
     }
 
     class DocAdapter extends ArrayAdapter<Doc> {

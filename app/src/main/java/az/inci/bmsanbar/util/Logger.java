@@ -1,4 +1,4 @@
-package az.inci.bmsanbar;
+package az.inci.bmsanbar.util;
 
 import android.content.Context;
 import android.util.Log;
@@ -114,7 +114,7 @@ public class Logger {
                         .append("\n");
                 fileWriter.flush();
             } catch (Exception e) {
-                Log.e("ZLogger", "Error writing to log file: " + e.getMessage());
+                Log.e("ZLogger", "Error writing to log file: " + e.toString());
             }
         }
     }

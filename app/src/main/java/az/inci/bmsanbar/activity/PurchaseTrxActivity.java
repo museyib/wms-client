@@ -1,7 +1,11 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
 import static android.R.drawable.ic_dialog_info;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.fragment.StringDataHelper.getStringData;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.content.Context;
@@ -34,7 +38,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
 import az.inci.bmsanbar.model.v3.PurchaseTrx;
 import az.inci.bmsanbar.model.v3.UpdatePurchaseTrxRequest;
 
@@ -50,11 +56,12 @@ public class PurchaseTrxActivity extends ScannerSupportActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_purchase_trx);
+        setEdgeToEdge();
         sendButton = findViewById(R.id.send);
         trxListView = findViewById(R.id.trx_list);
 
         sendButton.setEnabled(false);
-        sendButton.setBackgroundColor(getResources().getColor(R.color.colorZeroQty));
+        sendButton.setBackgroundColor(getResources().getColor(R.color.colorZeroQty, getTheme()));
 
         ImageButton scanCam = findViewById(R.id.scan_cam);
         CheckBox continuousCheck = findViewById(R.id.continuous_check);
@@ -65,7 +72,7 @@ public class PurchaseTrxActivity extends ScannerSupportActivity
         readyCheck.setOnCheckedChangeListener((compoundButton, b) -> {
             sendButton.setEnabled(b);
             sendButton.setBackgroundColor(
-                    b ? Color.GREEN : getResources().getColor(R.color.colorZeroQty));
+                    b ? Color.GREEN : getResources().getColor(R.color.colorZeroQty, getTheme()));
         });
 
         if (cameraScanning) scanCam.setVisibility(View.VISIBLE);
@@ -116,17 +123,22 @@ public class PurchaseTrxActivity extends ScannerSupportActivity
     public void loadData() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("purchase", "trx-list") + "?trx-no=" + trxNo;
-            trxList = getListData(url, "GET", null, PurchaseTrx[].class);
-            Log.e("TRX_LIST", String.valueOf(trxList));
-
-            if (trxList != null) {
-                runOnUiThread(() -> {
-                    PurchaseTrxAdapter adapter = new PurchaseTrxAdapter(this, trxList);
-                    trxListView.setLayoutManager(new LinearLayoutManager(this));
-                    trxListView.setAdapter(adapter);
-                    adapter.notifyItemRangeChanged(0, trxList.size());
-                });
+            String url = createUrl("purchase", "trx-list") + "?trx-no=" + trxNo;
+            try {
+                trxList = httpClient.getListData(url, "GET", null, PurchaseTrx[].class);
+                if (trxList != null) {
+                    runOnUiThread(() -> {
+                        PurchaseTrxAdapter adapter = new PurchaseTrxAdapter(this, trxList);
+                        trxListView.setLayoutManager(new LinearLayoutManager(this));
+                        trxListView.setAdapter(adapter);
+                        adapter.notifyItemRangeChanged(0, trxList.size());
+                    });
+                }
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
             }
 
         }).start();
@@ -153,20 +165,31 @@ public class PurchaseTrxActivity extends ScannerSupportActivity
     private void updatePickTrx(PurchaseTrx trx) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("purchase", "update-qty");
+            String url = createUrl("purchase", "update-qty");
             UpdatePurchaseTrxRequest request = new UpdatePurchaseTrxRequest();
-            request.setUserId(getUser().getId());
+            request.setUserId(appUser.getId());
             request.setDeviceId(getDeviceIdString());
             request.setTrxNo(trxNo);
             request.setTrxId(trx.getTrxId());
             request.setQty(trx.getCountedQty());
-            executeUpdate(url, request, message -> {
-                showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-                PurchaseTrxAdapter adapter = (PurchaseTrxAdapter) trxListView.getAdapter();
-                if (adapter != null) {
-                    adapter.notifyItemChanged(focusPosition);
-                }
-            });
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, request);
+                runOnUiThread(() -> {
+                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                    PurchaseTrxAdapter adapter = (PurchaseTrxAdapter) trxListView.getAdapter();
+                    if (adapter != null) {
+                        adapter.notifyItemChanged(focusPosition);
+                    }
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
@@ -240,12 +263,12 @@ public class PurchaseTrxActivity extends ScannerSupportActivity
             startActivity(photoIntent);
         });
         builder.setNeutralButton("Say", (dialog, which) -> {
-            String url = url("inv", "qty");
+            String url = createUrl("inv", "qty");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("inv-code", trx.getInvCode());
             parameters.put("whs-code", trx.getWhsCode());
-            url = addRequestParameters(url, parameters);
-            showStringData(url, "Anbarda say");
+            url = addQueryParameters(url, parameters);
+            getStringData(this, url, "Anbarda say");
         });
         builder.show();
     }
@@ -261,7 +284,7 @@ public class PurchaseTrxActivity extends ScannerSupportActivity
 
     private class PurchaseTrxAdapter extends RecyclerView.Adapter<PurchaseTrxAdapter.ViewHolder> implements Filterable {
         private final Context context;
-        private List<PurchaseTrx> localDataList;
+        private final List<PurchaseTrx> localDataList;
         private View itemView;
 
         public PurchaseTrxAdapter(Context context, List<PurchaseTrx> localDataList) {

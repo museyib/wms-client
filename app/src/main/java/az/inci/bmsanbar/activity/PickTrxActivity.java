@@ -4,7 +4,12 @@ import static android.R.drawable.ic_dialog_alert;
 import static android.R.drawable.ic_dialog_info;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.fragment.InvBarcodeHelper.requestInvBarcode;
+import static az.inci.bmsanbar.fragment.LatestMovementsHelper.showInventoryHistory;
+import static az.inci.bmsanbar.fragment.StringDataHelper.getStringData;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.content.Context;
@@ -37,12 +42,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import az.inci.bmsanbar.DBHelper;
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.InvBarcode;
 import az.inci.bmsanbar.model.Trx;
 import az.inci.bmsanbar.model.v2.CollectTrxRequest;
 import az.inci.bmsanbar.model.v2.ResetPickRequest;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
+import az.inci.bmsanbar.util.DBHelper;
 
 public class PickTrxActivity extends ScannerSupportActivity
         implements SearchView.OnQueryTextListener {
@@ -62,6 +69,7 @@ public class PickTrxActivity extends ScannerSupportActivity
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.pick_trx_layout);
+        setEdgeToEdge();
         sendButton = findViewById(R.id.send);
         trxListView = findViewById(R.id.trx_list);
 
@@ -76,14 +84,13 @@ public class PickTrxActivity extends ScannerSupportActivity
 
         trxListView.setItemsCanFocus(true);
         sendButton.setEnabled(false);
-        sendButton.setBackgroundColor(getResources().getColor(R.color.colorZeroQty));
+        sendButton.setBackgroundColor(getResources().getColor(R.color.colorZeroQty, getTheme()));
 
         continuousCheck.setOnCheckedChangeListener((compoundButton, b) -> isContinuous = b);
 
         readyCheck.setOnCheckedChangeListener((compoundButton, b) -> {
             sendButton.setEnabled(b);
-            sendButton.setBackgroundColor(
-                    b ? Color.GREEN : getResources().getColor(R.color.colorZeroQty));
+            sendButton.setBackgroundColor(b ? Color.GREEN : getResources().getColor(R.color.colorZeroQty, getTheme()));
         });
 
         if (cameraScanning) scanCam.setVisibility(View.VISIBLE);
@@ -130,7 +137,7 @@ public class PickTrxActivity extends ScannerSupportActivity
             barcodeIntent.putExtra("serialScan", isContinuous);
             barcodeIntent.putExtra("trxNo", trxNo);
             barcodeIntent.putExtra("trxType", "pick");
-            barcodeResultLauncher.launch(1);
+            openCameraScanner(barcodeIntent);
         });
 
         equateAll.setOnClickListener(v -> {
@@ -215,15 +222,16 @@ public class PickTrxActivity extends ScannerSupportActivity
             startActivity(photoIntent);
         });
         builder.setNegativeButton("Say", (dialog, which) -> {
-            String url = url("inv", "qty");
+            String url = createUrl("inv", "qty");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("whs-code", trx.getWhsCode());
             parameters.put("inv-code", trx.getInvCode());
-            url = addRequestParameters(url, parameters);
-            showStringData(url, "Anbarda say");
+            url = addQueryParameters(url, parameters);
+            getStringData(this, url, "Anbarda say");
         });
 
-        builder.setNeutralButton("Tarixçə", (dialog, which) -> getLatestMovements(trx.getInvCode(), trx.getWhsCode()));
+        builder.setNeutralButton("Tarixçə",
+                (dialog, which) -> showInventoryHistory(this, trx.getInvCode(), trx.getWhsCode()));
         builder.show();
     }
 
@@ -271,7 +279,7 @@ public class PickTrxActivity extends ScannerSupportActivity
     public void onScanComplete(String barcode) {
         Trx trx = dbHelper.getPickTrxByBarcode(barcode, trxNo);
         if (trx != null) goToScannedItem(trx);
-        else getInvBarcodeFromServer(barcode, this::checkInvBarcode);
+        else requestInvBarcode(this, barcode, this::checkInvBarcode);
     }
 
     public void loadData() {
@@ -395,35 +403,57 @@ public class PickTrxActivity extends ScannerSupportActivity
             requestList.add(request);
         }
 
-        String url = url("pick", "collect");
+        String url = createUrl("pick", "collect");
         Map<String, String> parameters = new HashMap<>();
         parameters.put("trx-no", null);
-        url = addRequestParameters(url, parameters);
-        executeUpdate(url, requestList, message -> {
-            if (message.getStatusCode() == 0) {
-                dbHelper.deletePickTrx(trxNo);
-                finish();
-                showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-            } else
-                showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-        });
+        url = addQueryParameters(url, parameters);
+        try {
+            ResponseMessage message = httpClient.executeUpdate(url, requestList);
+            runOnUiThread(() -> {
+                if (message.getStatusCode() == 0) {
+                    dbHelper.deletePickTrx(trxNo);
+                    finish();
+                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                } else
+                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+            });
+        } catch (CustomException e) {
+            logger.logError(e.toString());
+            runOnUiThread(() -> {
+                showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                playSound(SOUND_FAIL);
+            });
+        } finally {
+            runOnUiThread(() -> showProgressDialog(false));
+        }
     }
 
     private void reset() {
         showProgressDialog(true);
-        String url = url("pick", "reset");
+        String url = createUrl("pick", "reset");
         ResetPickRequest request = new ResetPickRequest();
         request.setTrxNo(trxNo);
-        request.setUserId(getUser().getId());
-        executeUpdate(url, request, message -> {
-            if (message.getStatusCode() == 0) {
-                dbHelper.deletePickTrx(trxNo);
-                finish();
-            } else {
-                showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+        request.setUserId(appUser.getId());
+        try {
+            ResponseMessage message = httpClient.executeUpdate(url, request);
+            runOnUiThread(() -> {
+                if (message.getStatusCode() == 0) {
+                    dbHelper.deletePickTrx(trxNo);
+                    finish();
+                } else {
+                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                    playSound(SOUND_FAIL);
+                }
+            });
+        } catch (CustomException e) {
+            logger.logError(e.toString());
+            runOnUiThread(() -> {
+                showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
                 playSound(SOUND_FAIL);
-            }
-        });
+            });
+        } finally {
+            runOnUiThread(() -> showProgressDialog(false));
+        }
     }
 
     class TrxAdapter extends ArrayAdapter<Trx> implements Filterable {
@@ -455,7 +485,7 @@ public class PickTrxActivity extends ScannerSupportActivity
 
             if (trx.getPickedQty() == 0)
                 convertView.setBackgroundColor(
-                        activity.getResources().getColor(R.color.colorZeroQty));
+                        activity.getResources().getColor(R.color.colorZeroQty, getTheme()));
             else if (trx.getPickedQty() < trx.getQty())
                 convertView.setBackgroundColor(Color.YELLOW);
 

@@ -1,4 +1,4 @@
-package az.inci.bmsanbar;
+package az.inci.bmsanbar.util;
 
 public class GlobalParameters {
     public static String serviceUrl;

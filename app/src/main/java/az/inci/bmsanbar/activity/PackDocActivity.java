@@ -1,6 +1,9 @@
 package az.inci.bmsanbar.activity;
 
 import static android.R.drawable.ic_dialog_info;
+import static az.inci.bmsanbar.fragment.PickReportHelper.getPickReportData;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.content.Context;
 import android.content.Intent;
@@ -26,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Doc;
 import az.inci.bmsanbar.model.Trx;
@@ -41,6 +45,7 @@ public class PackDocActivity extends AppBaseActivity implements SearchView.OnQue
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.pack_dock_layout);
+        setEdgeToEdge();
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -85,7 +90,7 @@ public class PackDocActivity extends AppBaseActivity implements SearchView.OnQue
 
     @Override
     public void loadData() {
-        docList = dbHelper.getPackDocsByApproveUser(getUser().getId());
+        docList = dbHelper.getPackDocsByApproveUser(appUser.getId());
         DocAdapter docAdapter = new DocAdapter(this, R.layout.pack_doc_item_layout, docList);
         docListView.setAdapter(docAdapter);
         if (docList.isEmpty())
@@ -119,7 +124,7 @@ public class PackDocActivity extends AppBaseActivity implements SearchView.OnQue
 
         MenuItem report = menu.findItem(R.id.pick_report);
         report.setOnMenuItemClickListener(item1 -> {
-            showPickDateDialog("pack");
+            getPickReportData(this, "pack");
             return true;
         });
 
@@ -141,26 +146,35 @@ public class PackDocActivity extends AppBaseActivity implements SearchView.OnQue
     private void loadTrxFromServer(int mode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("pack", "get-doc");
+            String url = createUrl("pack", "get-doc");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("approve-user", getUser().getId());
+            parameters.put("approve-user", appUser.getId());
             parameters.put("mode", String.valueOf(mode));
-            url = addRequestParameters(url, parameters);
-            Doc doc = getSimpleObject(url, "GET", null, Doc.class);
-
-            runOnUiThread(() -> {
-                if (doc != null) {
-                    dbHelper.addPackDoc(doc);
-                    for (Trx trx : doc.getTrxList()) {
-                        dbHelper.addPackTrx(trx);
+            url = addQueryParameters(url, parameters);
+            try {
+                Doc doc = httpClient.getSimpleObject(url, "GET", null, Doc.class);
+                runOnUiThread(() -> {
+                    if (doc != null) {
+                        dbHelper.addPackDoc(doc);
+                        for (Trx trx : doc.getTrxList()) {
+                            dbHelper.addPackTrx(trx);
+                        }
+                    } else {
+                        showMessageDialog(getString(R.string.info), getString(R.string.no_data),
+                                ic_dialog_info);
+                        playSound(SOUND_FAIL);
                     }
-                } else {
-                    showMessageDialog(getString(R.string.info), getString(R.string.no_data),
-                            ic_dialog_info);
+                    loadData();
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_info);
                     playSound(SOUND_FAIL);
-                }
-                loadData();
-            });
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 

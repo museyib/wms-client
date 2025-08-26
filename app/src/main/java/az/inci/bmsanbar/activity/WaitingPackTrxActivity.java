@@ -1,5 +1,10 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
+import static az.inci.bmsanbar.fragment.StringDataHelper.getStringData;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -20,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Trx;
 
@@ -36,6 +42,7 @@ public class WaitingPackTrxActivity extends AppBaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_waiting_pack_trx);
+        setEdgeToEdge();
         decimalFormat = new DecimalFormat();
         decimalFormat.setGroupingUsed(false);
         trxListView = findViewById(R.id.trx_list);
@@ -76,12 +83,12 @@ public class WaitingPackTrxActivity extends AppBaseActivity {
             startActivity(photoIntent);
         });
         builder.setNeutralButton("Say", (dialog, which) -> {
-            String url = url("inv", "qty");
+            String url = createUrl("inv", "qty");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("whs-code", trx.getWhsCode());
             parameters.put("inv-code", trx.getInvCode());
-            url = addRequestParameters(url, parameters);
-            showStringData(url, "Anbarda say");
+            url = addQueryParameters(url, parameters);
+            getStringData(this, url, "Anbarda say");
         });
         builder.show();
     }
@@ -89,25 +96,28 @@ public class WaitingPackTrxActivity extends AppBaseActivity {
     public void getData() {
         showProgressDialog(true);
         new Thread(() -> {
-            trxList = getTrxList();
-            if (trxList != null) runOnUiThread(this::loadData);
+            String url = createUrl("pack", "waiting-doc-items");
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put("trx-no", trxNo);
+            url = addQueryParameters(url, parameters);
+            try {
+                trxList = httpClient.getListData(url, "GET", null, Trx[].class);
+                if (trxList != null) runOnUiThread(this::loadData);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     @Override
     protected void loadData() {
-        if (trxList.size() > 0) {
+        if (!trxList.isEmpty()) {
             TrxAdapter trxAdapter = new TrxAdapter(this, R.layout.pack_trx_item_layout, trxList);
             trxListView.setAdapter(trxAdapter);
         }
-    }
-
-    private List<Trx> getTrxList() {
-        String url = url("pack", "waiting-doc-items");
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("trx-no", trxNo);
-        url = addRequestParameters(url, parameters);
-        return getListData(url, "GET", null, Trx[].class);
     }
 
     class TrxAdapter extends ArrayAdapter<Trx> {

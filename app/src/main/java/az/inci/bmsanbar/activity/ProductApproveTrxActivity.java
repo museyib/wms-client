@@ -1,29 +1,25 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
-import android.print.PrintAttributes;
-import android.print.PrintDocumentAdapter;
-import android.print.PrintManager;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.Filter;
@@ -41,7 +37,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -51,15 +46,19 @@ import java.util.Map;
 import java.util.Objects;
 
 import az.inci.bmsanbar.AppConfig;
-import az.inci.bmsanbar.DBHelper;
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Doc;
 import az.inci.bmsanbar.model.Inventory;
 import az.inci.bmsanbar.model.Trx;
 import az.inci.bmsanbar.model.v2.ProductApproveRequest;
 import az.inci.bmsanbar.model.v2.ProductApproveRequestItem;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
+import az.inci.bmsanbar.util.DBHelper;
+import az.inci.bmsanbar.util.PrinterHelper;
 
 public class ProductApproveTrxActivity extends ScannerSupportActivity {
+    private PrinterHelper printerHelper;
     private RecyclerView trxListView;
     private SearchView searchView;
     private List<Trx> trxList;
@@ -72,6 +71,8 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.product_approve_trx_layout);
+        setEdgeToEdge();
+        printerHelper = new PrinterHelper(this);
         trxListView = findViewById(R.id.trx_list_view);
 
         ImageButton selectInvBtn = findViewById(R.id.inv_list);
@@ -93,7 +94,7 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
             if (!trxList.isEmpty()) {
                 String report = getPrintForm();
                 showProgressDialog(true);
-                print(report);
+                printerHelper.print(report);
             }
         });
 
@@ -107,7 +108,7 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
                     ProductApproveTrxActivity.this);
             dialogBuilder.setMessage("Göndərmək istəyirsiniz?")
                     .setPositiveButton("Bəli", (dialog1, which) -> {
-                        int status = getUser().isApprovePrdFlag() ? 0 : 2;
+                        int status = appUser.isApprovePrdFlag() ? 0 : 2;
                         uploadDoc(status);
                     })
                     .setNegativeButton("Xeyr", null);
@@ -115,7 +116,9 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
         });
 
         scanCam.setVisibility(cameraScanning ? VISIBLE : GONE);
-        scanCam.setOnClickListener(v -> barcodeResultLauncher.launch(1));
+        Intent intent = new Intent(this, BarcodeScannerCamera.class);
+        intent.putExtra("serialScan", false);
+        scanCam.setOnClickListener(v -> openCameraScanner());
 
         notesEdit.addTextChangedListener(new TextWatcher() {
             @Override
@@ -208,35 +211,45 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
     private void getInvFromServer(String barcode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "by-barcode");
+            String url = createUrl("inv", "by-barcode");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("barcode", barcode);
-            url = addRequestParameters(url, parameters);
-            Inventory currentInv = getSimpleObject(url, "GET", null, Inventory.class);
-
-            if (currentInv != null) runOnUiThread(() -> showAddInvDialog(currentInv));
+            url = addQueryParameters(url, parameters);
+            try {
+                Inventory currentInv = httpClient.getSimpleObject(url, "GET", null, Inventory.class);
+                if (currentInv != null) runOnUiThread(() -> showAddInvDialog(currentInv));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void getInvList() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "by-user-producer-list");
+            String url = createUrl("inv", "by-user-producer-list");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("user-id", getUser().getId());
-            url = addRequestParameters(url, parameters);
-            invList = getListData(url, "GET", null, Inventory[].class);
-
-            runOnUiThread(() -> {
-                if (invList != null) showInvList();
-            });
+            parameters.put("user-id", appUser.getId());
+            url = addQueryParameters(url, parameters);
+            try {
+                invList = httpClient.getListData(url, "GET", null, Inventory[].class);
+                runOnUiThread(() -> {
+                    if (invList != null) showInvList();
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void showInvList() {
-        View view = LayoutInflater.from(this)
-                .inflate(R.layout.result_list_dialog,
-                        findViewById(android.R.id.content), false);
+        View view = getLayoutInflater().inflate(R.layout.result_list_dialog, findViewById(android.R.id.content), false);
         ListView listView = view.findViewById(R.id.result_list);
         InventoryAdapter adapter = new InventoryAdapter(this, R.layout.inv_list_item, invList);
         SearchView searchView = view.findViewById(R.id.search);
@@ -362,13 +375,13 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
     private void uploadDoc(int status) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv-move", "approve-prd", "insert");
+            String url = createUrl("inv-move", "approve-prd", "insert");
             ProductApproveRequest request = new ProductApproveRequest();
             request.setTrxNo(trxNo);
             request.setTrxDate(new java.sql.Date(System.currentTimeMillis()).toString());
             request.setStatus(status);
             request.setNotes(notes);
-            request.setUserId(getUser().getId());
+            request.setUserId(appUser.getId());
             List<ProductApproveRequestItem> requestItems = new ArrayList<>();
             for (Trx trx : trxList) {
                 ProductApproveRequestItem requestItem = new ProductApproveRequestItem();
@@ -381,47 +394,24 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
             }
             request.setRequestItems(requestItems);
 
-            executeUpdate(url, request, message -> {
-                if (message.getStatusCode() == 0) {
-                    dbHelper.deleteApproveDoc(trxNo);
-                    finish();
-                }
-            });
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, request);
+                runOnUiThread(() -> {
+                    if (message.getStatusCode() == 0) {
+                        dbHelper.deleteApproveDoc(trxNo);
+                        finish();
+                    }
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
-    }
-
-    private void print(String html) {
-        WebView webView = new WebView(this);
-        webView.setWebViewClient(new WebViewClient() {
-
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return false;
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                showProgressDialog(false);
-                createWebPrintJob(view);
-            }
-        });
-
-        webView.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null);
-    }
-
-    private void createWebPrintJob(WebView webView) {
-        PrintManager printManager = (PrintManager) this.getSystemService(Context.PRINT_SERVICE);
-
-        String jobName = getString(R.string.app_name) + " Document";
-
-        PrintDocumentAdapter printAdapter;
-        PrintAttributes.Builder builder = new PrintAttributes.Builder().setMediaSize(
-                PrintAttributes.MediaSize.ISO_A4);
-
-        printAdapter = webView.createPrintDocumentAdapter(jobName);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            builder.setDuplexMode(PrintAttributes.DUPLEX_MODE_LONG_EDGE);
-        printManager.print(jobName, printAdapter, builder.build());
     }
 
     private String getPrintForm() {
@@ -438,8 +428,7 @@ public class ProductApproveTrxActivity extends ScannerSupportActivity {
         html = html.concat("<th>Brend</th>");
         html = html.concat("<th>İç sayı</th>");
         html = html.concat("<th>Miqdar</th>");
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-            Collections.sort(trxList, Comparator.comparing(Trx::getInvCode));
+        trxList.sort(Comparator.comparing(Trx::getInvCode));
         for (Trx trx : trxList) {
 
             html = html.concat("<tr><td>" + trx.getInvCode() + "</td>");

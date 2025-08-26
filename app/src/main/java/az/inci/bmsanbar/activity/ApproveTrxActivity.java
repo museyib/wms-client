@@ -1,27 +1,24 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
+import static android.R.drawable.ic_dialog_info;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
-import android.print.PrintAttributes;
-import android.print.PrintDocumentAdapter;
-import android.print.PrintManager;
 import android.text.InputType;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -43,7 +40,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -53,7 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import az.inci.bmsanbar.AppConfig;
-import az.inci.bmsanbar.DBHelper;
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Customer;
 import az.inci.bmsanbar.model.Doc;
@@ -61,10 +57,14 @@ import az.inci.bmsanbar.model.Inventory;
 import az.inci.bmsanbar.model.Sbe;
 import az.inci.bmsanbar.model.Trx;
 import az.inci.bmsanbar.model.Whs;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
 import az.inci.bmsanbar.model.v2.TransferRequest;
 import az.inci.bmsanbar.model.v2.TransferRequestItem;
+import az.inci.bmsanbar.util.DBHelper;
+import az.inci.bmsanbar.util.PrinterHelper;
 
 public class ApproveTrxActivity extends ScannerSupportActivity {
+    PrinterHelper printerHelper;
     private RadioButton fromWhsBtn;
     private Button selectSrcBtn;
     private RecyclerView trxListView;
@@ -96,6 +96,9 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.approve_trx_layout);
+        setEdgeToEdge();
+        printerHelper = new PrinterHelper(this);
+
         selectSrcBtn = findViewById(R.id.select_src);
         trxListView = findViewById(R.id.trx_list_view);
         fromWhsBtn = findViewById(R.id.src_whs_btn);
@@ -162,11 +165,10 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
                     default:
                         report = "";
                 }
-                showProgressDialog(true);
-                print(report);
+                printerHelper.print(report);
             } else {
                 showMessageDialog(getString(R.string.info), "Mənbə seçilməyib",
-                        android.R.drawable.ic_dialog_info);
+                        ic_dialog_info);
             }
         });
 
@@ -225,7 +227,7 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
         });
 
         scanCam.setVisibility(cameraScanning ? VISIBLE : GONE);
-        scanCam.setOnClickListener(v -> barcodeResultLauncher.launch(1));
+        scanCam.setOnClickListener(v -> openCameraScanner());
 
         getOnBackPressedDispatcher().addCallback(new OnBackPressedCallback(true) {
             @Override
@@ -408,76 +410,113 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     private void getInvFromServer(String barcode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "by-barcode");
+            String url = createUrl("inv", "by-barcode");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("barcode", barcode);
-            url = addRequestParameters(url, parameters);
-            Inventory currentInv = getSimpleObject(url, "GET", null, Inventory.class);
-
-            if (currentInv != null) showAddInvDialog(currentInv);
+            url = addQueryParameters(url, parameters);
+            try {
+                Inventory currentInv = httpClient.getSimpleObject(url, "GET", null, Inventory.class);
+                if (currentInv != null) showAddInvDialog(currentInv);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void getSbeList() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("src", "sbe");
-            List<Sbe> sbeList = getListData(url, "GET", null, Sbe[].class);
+            String url = createUrl("src", "sbe");
+            try {
+                List<Sbe> sbeList = httpClient.getListData(url, "GET", null, Sbe[].class);
+                if (sbeList != null) runOnUiThread(() -> showSbeList(sbeList));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
 
-            if (sbeList != null) runOnUiThread(() -> showSbeList(sbeList));
         }).start();
     }
 
     private void getCustomerList(String sbeCode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("src", "customer");
+            String url = createUrl("src", "customer");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("sbe-code", sbeCode);
-            url = addRequestParameters(url, parameters);
-            List<Customer> customerList = getListData(url, "GET", null, Customer[].class);
-
-            if (customerList != null) runOnUiThread(() -> showCustomerList(customerList));
+            url = addQueryParameters(url, parameters);
+            try {
+                List<Customer> customerList = httpClient.getListData(url, "GET", null, Customer[].class);
+                if (customerList != null) runOnUiThread(() -> showCustomerList(customerList));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void getWhsList() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("src", "whs");
-            List<Whs> whsList = getListData(url, "GET", null, Whs[].class);
-            if (whsList != null) runOnUiThread(() -> showSrcWhsList(whsList));
+            String url = createUrl("src", "whs");
+            try {
+                List<Whs> whsList = httpClient.getListData(url, "GET", null, Whs[].class);
+                if (whsList != null) runOnUiThread(() -> showSrcWhsList(whsList));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void loadTrgWhsList() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("src", "whs", "target");
+            String url = createUrl("src", "whs", "target");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("user-id", getUser().getId());
-            url = addRequestParameters(url, parameters);
-            trgWhsList = getListData(url, "GET", null, Whs[].class);
+            parameters.put("user-id", appUser.getId());
+            url = addQueryParameters(url, parameters);
+            try {
+                trgWhsList = httpClient.getListData(url, "GET", null, Whs[].class);
+                if (trgWhsList != null) 
+                    runOnUiThread(this::publishTrgWhsList);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
 
-            if (trgWhsList == null) trgWhsList = Collections.emptyList();
-
-            runOnUiThread(this::publishTrgWhsList);
         }).start();
     }
 
     private void getInvList() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv");
-            invList = getListData(url, "GET", null, Inventory[].class);
-            if (invList != null) runOnUiThread(this::showInvList);
+            String url = createUrl("inv");
+            try {
+                invList = httpClient.getListData(url, "GET", null, Inventory[].class);
+                if (invList != null) runOnUiThread(this::showInvList);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void showInvList() {
-        View view = LayoutInflater.from(this)
-                .inflate(R.layout.result_list_dialog,
-                        findViewById(android.R.id.content), false);
+        View view = getLayoutInflater().inflate(R.layout.result_list_dialog, findViewById(android.R.id.content), false);
         ListView listView = view.findViewById(R.id.result_list);
         InventoryAdapter adapter = new InventoryAdapter(this, invList);
         SearchView searchView = view.findViewById(R.id.search);
@@ -494,8 +533,7 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
             }
         });
         listView.setAdapter(adapter);
-        listView.setOnItemClickListener(
-                (parent, view1, position, id) -> showAddInvDialog((Inventory) view1.getTag()));
+        listView.setOnItemClickListener((parent, view1, position, id) -> showAddInvDialog((Inventory) view1.getTag()));
         listView.setOnItemLongClickListener((parent, view1, position, id) -> {
             showInfoDialog((Inventory) view1.getTag());
             return true;
@@ -513,9 +551,7 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     }
 
     private void showSbeList(List<Sbe> sbeList) {
-        View view = LayoutInflater.from(this)
-                .inflate(R.layout.result_list_dialog,
-                        findViewById(android.R.id.content), false);
+        View view = getLayoutInflater().inflate(R.layout.result_list_dialog, findViewById(android.R.id.content), false);
         ListView listView = view.findViewById(R.id.result_list);
         ArrayAdapter<Sbe> adapter = new ArrayAdapter<>(this, R.layout.simple_list_item, sbeList);
         SearchView searchView = view.findViewById(R.id.search);
@@ -544,12 +580,9 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     }
 
     private void showCustomerList(List<Customer> customerList) {
-        View view = LayoutInflater.from(this)
-                .inflate(R.layout.result_list_dialog,
-                        findViewById(android.R.id.content), false);
+        View view = getLayoutInflater().inflate(R.layout.result_list_dialog, findViewById(android.R.id.content), false);
         ListView listView = view.findViewById(R.id.result_list);
-        ArrayAdapter<Customer> adapter = new ArrayAdapter<>(this, R.layout.simple_list_item,
-                customerList);
+        ArrayAdapter<Customer> adapter = new ArrayAdapter<>(this, R.layout.simple_list_item, customerList);
         SearchView searchView = view.findViewById(R.id.search);
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
@@ -586,9 +619,7 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     }
 
     private void showSrcWhsList(List<Whs> whsList) {
-        View view = LayoutInflater.from(this)
-                .inflate(R.layout.result_list_dialog,
-                        findViewById(android.R.id.content), false);
+        View view = getLayoutInflater().inflate(R.layout.result_list_dialog, findViewById(android.R.id.content), false);
         ListView listView = view.findViewById(R.id.result_list);
         ArrayAdapter<Whs> adapter = new ArrayAdapter<>(this, R.layout.simple_list_item, whsList);
         SearchView searchView = view.findViewById(R.id.search);
@@ -625,7 +656,7 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     private void showAddInvDialog(Inventory inventory) {
         if (inventory.getInvCode() == null) {
             showMessageDialog(getString(R.string.info), getString(R.string.good_not_found),
-                    android.R.drawable.ic_dialog_info);
+                    ic_dialog_info);
         } else {
             EditText qtyEdit = new EditText(this);
             qtyEdit.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -671,7 +702,7 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     private void showEditInvDialog(Trx trx) {
         if (trx == null) {
             showMessageDialog(getString(R.string.info), getString(R.string.good_not_found),
-                    android.R.drawable.ic_dialog_info);
+                    ic_dialog_info);
         } else {
             EditText qtyEdit = new EditText(this);
             qtyEdit.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -743,22 +774,29 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     private void splitTrx(Trx trx) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("trx", "split-trx");
+            String url = createUrl("trx", "split-trx");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("bp-code", bpCode);
             parameters.put("inv-code", trx.getInvCode());
             parameters.put("qty", String.valueOf(trx.getQty()));
-            url = addRequestParameters(url, parameters);
-            List<Trx> splitTrxList = getListData(url, "GET", null, Trx[].class);
+            url = addQueryParameters(url, parameters);
+            try {
+                List<Trx> splitTrxList = httpClient.getListData(url, "GET", null, Trx[].class);
 
-            if (splitTrxList != null) {
-                runOnUiThread(() -> {
-                    if (!splitTrxList.isEmpty()) {
-                        addSplitTrx(splitTrxList, trx);
-                    } else {
-                        addApproveTrx(trx);
-                    }
-                });
+                if (splitTrxList != null) {
+                    runOnUiThread(() -> {
+                        if (!splitTrxList.isEmpty()) {
+                            addSplitTrx(splitTrxList, trx);
+                        } else {
+                            addApproveTrx(trx);
+                        }
+                    });
+                }
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
             }
         }).start();
     }
@@ -793,41 +831,6 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
         loadData();
     }
 
-    private void print(String html) {
-        WebView webView = new WebView(this);
-        webView.setWebViewClient(new WebViewClient() {
-
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return false;
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                showProgressDialog(false);
-                createWebPrintJob(view);
-            }
-        });
-
-        webView.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null);
-    }
-
-    private void createWebPrintJob(WebView webView) {
-        PrintManager printManager = (PrintManager) this.getSystemService(Context.PRINT_SERVICE);
-
-        String jobName = getString(R.string.app_name) + " Document";
-
-        PrintDocumentAdapter printAdapter;
-        PrintAttributes.Builder builder = new PrintAttributes.Builder().setMediaSize(
-                PrintAttributes.MediaSize.ISO_A4);
-
-        printAdapter = webView.createPrintDocumentAdapter(jobName);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            builder.setDuplexMode(PrintAttributes.DUPLEX_MODE_LONG_EDGE);
-        }
-        printManager.print(jobName, printAdapter, builder.build());
-    }
-
     private String getTransferForm() {
         String html = "<html><head><style>*{margin:0px; padding:0px}" +
                 "table,tr,th,td{border: 1px solid black;border-collapse: collapse; font-size: 12px}" +
@@ -845,9 +848,7 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
         html = html.concat("<th>Miqdar</th>");
         html = html.concat("<th>Qiymət</th>");
         html = html.concat("<th>Məbləğ</th>");
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            Collections.sort(trxList, Comparator.comparing(Trx::getPrevTrxNo));
-        }
+        trxList.sort(Comparator.comparing(Trx::getPrevTrxNo));
         for (Trx trx : trxList) {
 
             html = html.concat(
@@ -891,12 +892,10 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
         double invAmount;
         double discountAmount = 0;
         double amountWithoutDiscount = 0;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            if (trxTypeId == 27) {
-                Collections.sort(trxList, Comparator.comparing(Trx::getPrevTrxNo));
-            } else {
-                Collections.sort(trxList, Comparator.comparingInt(Trx::getTrxId));
-            }
+        if (trxTypeId == 27) {
+            trxList.sort(Comparator.comparing(Trx::getPrevTrxNo));
+        } else {
+            trxList.sort(Comparator.comparingInt(Trx::getTrxId));
         }
         for (Trx trx : trxList) {
             invAmount = trx.getAmount() - trx.getDiscount();
@@ -934,14 +933,14 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
     }
 
     private void uploadTransfer() {
-        showProgressDialog(true);
         if (isReady) {
+            showProgressDialog(true);
             new Thread(() -> {
-                String url = url("inv-move", "create-transfer");
+                String url = createUrl("inv-move", "create-transfer");
                 TransferRequest request = new TransferRequest();
                 request.setSrcWhsCode(srcWhs.getWhsCode());
                 request.setTrgWhsCode(trgWhs.getWhsCode());
-                request.setUserId(getUser().getId());
+                request.setUserId(appUser.getId());
                 List<TransferRequestItem> items = new ArrayList<>();
                 for (Trx trx : trxList) {
                     TransferRequestItem requestItem = new TransferRequestItem();
@@ -951,17 +950,30 @@ public class ApproveTrxActivity extends ScannerSupportActivity {
                 }
                 request.setRequestItems(items);
 
-                executeUpdate(url, request, message -> {
-                    if (message.getStatusCode() == 0) {
-                        dbHelper.deleteApproveDoc(trxNo);
-                        finish();
-                    }
-                });
+                try {
+                    ResponseMessage message = httpClient.executeUpdate(url, request);
+                    runOnUiThread(() -> {
+                        if (message.getStatusCode() == 0) {
+                            dbHelper.deleteApproveDoc(trxNo);
+                            finish();
+                        } else {
+                            showMessageDialog(getString(R.string.error), message.getBody(),
+                                    message.getIconId());
+                        }
+                    });
+                } catch (CustomException e) {
+                    logger.logError(e.toString());
+                    runOnUiThread(() -> {
+                        showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                        playSound(SOUND_FAIL);
+                    });
+                } finally {
+                    runOnUiThread(() -> showProgressDialog(false));
+                }
             }).start();
         } else {
-            showProgressDialog(false);
             showMessageDialog(getString(R.string.info), "Mənbə təyin edilməyib",
-                    android.R.drawable.ic_dialog_info);
+                    ic_dialog_info);
         }
     }
 

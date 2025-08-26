@@ -1,5 +1,9 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
+
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -22,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.v3.PurchaseDoc;
 
@@ -34,6 +39,7 @@ public class PurchaseOrdersActivity extends AppBaseActivity implements SearchVie
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_purchase_orders);
+        setEdgeToEdge();
         dataListView = findViewById(R.id.data_list);
         Button refresh = findViewById(R.id.refresh);
         dataListView.setLayoutManager(new LinearLayoutManager(this));
@@ -49,15 +55,21 @@ public class PurchaseOrdersActivity extends AppBaseActivity implements SearchVie
         showProgressDialog(true);
         new Thread(() -> {
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("user-id", getUser().getId());
-            String url = addRequestParameters(url("purchase", "doc"), parameters);
-            docList = getListData(url, "GET", null, PurchaseDoc[].class);
-
-            if (docList != null) {
-                runOnUiThread(() -> {
-                    PurchaseDocAdapter adapter = new PurchaseDocAdapter(this, docList);
-                    dataListView.setAdapter(adapter);
-                });
+            parameters.put("user-id", appUser.getId());
+            String url = addQueryParameters(createUrl("purchase", "doc"), parameters);
+            try {
+                docList = httpClient.getListData(url, "GET", null, PurchaseDoc[].class);
+                if (docList != null) {
+                    runOnUiThread(() -> {
+                        PurchaseDocAdapter adapter = new PurchaseDocAdapter(this, docList);
+                        dataListView.setAdapter(adapter);
+                    });
+                }
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
             }
         }).start();
     }

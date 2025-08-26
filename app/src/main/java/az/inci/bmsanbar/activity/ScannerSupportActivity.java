@@ -7,11 +7,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.device.ScanManager;
+import android.os.Bundle;
 import android.view.KeyEvent;
 
 import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContract;
-import androidx.annotation.NonNull;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
@@ -30,7 +30,20 @@ public abstract class ScannerSupportActivity extends AppBaseActivity {
         }
     };
     protected boolean isUrovoOpen = false;
-    ActivityResultLauncher<Integer> barcodeResultLauncher = barcodeResultLauncher();
+    ActivityResultLauncher<Intent> barcodeResultLauncher;
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        barcodeResultLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+        result -> {
+            Intent data = result.getData();
+            if (data != null) {
+                String barcode = data.getStringExtra("barcode");
+                if (!isEmpty(barcode)) onScanComplete(barcode);
+            }
+        });
+    }
 
     private void initUrovoScanner() {
         try {
@@ -42,7 +55,7 @@ public abstract class ScannerSupportActivity extends AppBaseActivity {
             filter.addAction(ScanManager.ACTION_DECODE);
             ContextCompat.registerReceiver(this, urovoScanReceiver, filter, ContextCompat.RECEIVER_EXPORTED);
         } catch (RuntimeException e) {
-            logger.logError(e.getMessage());
+            logger.logError(e.toString());
         }
     }
 
@@ -68,7 +81,7 @@ public abstract class ScannerSupportActivity extends AppBaseActivity {
                 unregisterReceiver(urovoScanReceiver);
             }
         } catch (RuntimeException e) {
-            logger.logError(e.getMessage());
+            logger.logError(e.toString());
         }
     }
 
@@ -100,29 +113,22 @@ public abstract class ScannerSupportActivity extends AppBaseActivity {
         stopScan();
     }
 
-    ActivityResultLauncher<Integer> barcodeResultLauncher() {
-        return registerForActivityResult(new ActivityResultContract<Integer, String>() {
-            @NonNull
-            @Override
-            public Intent createIntent(@NonNull Context context, Integer input) {
-                Class<?> cameraClass;
+    protected void openCameraScanner() {
+        openCameraScanner(new Intent(this, BarcodeScannerCamera.class));
+    }
 
-                cameraClass = BarcodeScannerCamera.class;
-                Intent intent = new Intent(ScannerSupportActivity.this, cameraClass);
-                intent.putExtra("scanTarget", input);
+    protected void openCameraScanner(Intent intent) {
+        barcodeResultLauncher.launch(intent);
+    }
 
-                return intent;
+    ActivityResultLauncher<Intent> barcodeResultLauncher() {
+        return registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+            Intent data = result.getData();
+            if (data != null) {
+                String barcode = data.getStringExtra("barcode");
+                if (!isEmpty(barcode)) onScanComplete(barcode);
             }
-
-            @Override
-            public String parseResult(int resultCode, @Nullable Intent intent) {
-                String scanResult = "";
-                if (intent != null) scanResult = intent.getStringExtra("barcode");
-
-                return scanResult;
-            }
-        }, barcode -> {
-            if (!isEmpty(barcode)) onScanComplete(barcode);
         });
     }
 }

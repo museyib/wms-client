@@ -11,7 +11,7 @@ public class Request<T> {
 
     public static <T> Request<T> create(AppBaseActivity context, T data) {
         Request<T> request = new Request<>();
-        request.setUserId(context.getUser().getId());
+        request.setUserId(context.appUser.getId());
         request.setDeviceId(context.getDeviceIdString());
         request.setData(data);
         return request;

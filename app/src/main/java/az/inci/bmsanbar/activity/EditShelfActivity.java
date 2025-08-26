@@ -3,7 +3,9 @@ package az.inci.bmsanbar.activity;
 import static android.R.drawable.ic_dialog_alert;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.os.Bundle;
@@ -18,8 +20,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Inventory;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
 
 public class EditShelfActivity extends ScannerSupportActivity {
     private final List<Inventory> inventoryList = new ArrayList<>();
@@ -31,6 +35,8 @@ public class EditShelfActivity extends ScannerSupportActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_edit_shelf);
+        setEdgeToEdge();
+
         shelfBarcodeEdit = findViewById(R.id.shelf_barcode);
         invListView = findViewById(R.id.inv_list_view);
 
@@ -39,7 +45,7 @@ public class EditShelfActivity extends ScannerSupportActivity {
         ImageButton clearBtn = findViewById(R.id.clear);
 
         scanCam.setVisibility(cameraScanning ? VISIBLE : GONE);
-        scanCam.setOnClickListener(v -> barcodeResultLauncher.launch(0));
+        scanCam.setOnClickListener(v -> openCameraScanner());
 
         sendBtn.setOnClickListener(v -> {
             if (!inventoryList.isEmpty()) uploadData();
@@ -116,23 +122,33 @@ public class EditShelfActivity extends ScannerSupportActivity {
     private void getDataByBarcode(String barcode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "by-barcode");
+            String url = createUrl("inv", "by-barcode");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("barcode", barcode);
-            url = addRequestParameters(url, parameters);
-            Inventory inventory = getSimpleObject(url, "GET", null, Inventory.class);
-            if (inventory != null) {
+            url = addQueryParameters(url, parameters);
+            try {
+                Inventory inventory = httpClient.getSimpleObject(url, "GET", null, Inventory.class);
+                if (inventory != null) {
+                    runOnUiThread(() -> {
+                        if (inventory.getInvCode() == null) {
+                            showMessageDialog(getString(R.string.error),
+                                    getString(R.string.good_not_found),
+                                    ic_dialog_alert);
+                            playSound(SOUND_FAIL);
+                        } else {
+                            addAndRefreshList(inventory);
+                            playSound(SOUND_SUCCESS);
+                        }
+                    });
+                }
+            } catch (CustomException e) {
+                logger.logError(e.toString());
                 runOnUiThread(() -> {
-                    if (inventory.getInvCode() == null) {
-                        showMessageDialog(getString(R.string.error),
-                                getString(R.string.good_not_found),
-                                ic_dialog_alert);
-                        playSound(SOUND_FAIL);
-                    } else {
-                        addAndRefreshList(inventory);
-                        playSound(SOUND_SUCCESS);
-                    }
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
                 });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
             }
         }).start();
     }
@@ -140,19 +156,28 @@ public class EditShelfActivity extends ScannerSupportActivity {
     private void uploadData() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "update-shelf-barcode");
+            String url = createUrl("inv", "update-shelf-barcode");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("whs-code", getUser().getWhsCode());
+            parameters.put("whs-code", appUser.getWhsCode());
             parameters.put("shelf-barcode", shelfBarcode.replaceFirst("#", "%23"));
-            url = addRequestParameters(url, parameters);
+            url = addQueryParameters(url, parameters);
 
             List<String> barcodeList = new ArrayList<>();
             for (Inventory inventory : inventoryList) {
                 barcodeList.add(inventory.getBarcode());
             }
-            executeUpdate(url, barcodeList,
-                    message -> showMessageDialog(message.getTitle(), message.getBody(),
-                            message.getIconId()));
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, barcodeList);
+                runOnUiThread(() -> showMessageDialog(message.getTitle(), message.getBody(), message.getIconId()));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 }

@@ -30,6 +30,7 @@ public class ShipDocActivity extends AppBaseActivity {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.ship_doc_layout);
+        setEdgeToEdge();
         setTitle("Yükləmə sənədləri");
 
         docListView = findViewById(R.id.ship_doc_list_view);
@@ -75,7 +76,7 @@ public class ShipDocActivity extends AppBaseActivity {
     }
 
     void loadDocs() {
-        docList = dbHelper.getShipDocs(getUser().getId());
+        docList = dbHelper.getShipDocs(appUser.getId());
         DocAdapter adapter = new DocAdapter(this, R.layout.ship_doc_item_layout, docList);
         docListView.setAdapter(adapter);
     }

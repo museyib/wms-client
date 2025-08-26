@@ -1,6 +1,6 @@
 package az.inci.bmsanbar.activity;
 
-import static az.inci.bmsanbar.GlobalParameters.imageUrl;
+import static az.inci.bmsanbar.util.GlobalParameters.imageUrl;
 
 import android.os.Bundle;
 import android.webkit.WebView;
@@ -13,6 +13,7 @@ public class PhotoActivity extends AppBaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_inventory_photo);
+        setEdgeToEdge();
         WebView webView = findViewById(R.id.photo_view);
         webView.getSettings().setBuiltInZoomControls(true);
 

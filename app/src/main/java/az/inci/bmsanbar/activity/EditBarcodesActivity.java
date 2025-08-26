@@ -1,13 +1,15 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -25,10 +27,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.InvBarcode;
 import az.inci.bmsanbar.model.Uom;
 import az.inci.bmsanbar.model.v2.InvInfo;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
 import az.inci.bmsanbar.model.v4.Request;
 
 public class EditBarcodesActivity extends ScannerSupportActivity {
@@ -44,6 +48,7 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_edit_barcodes);
+        setEdgeToEdge();
         barcodeListView = findViewById(R.id.barcode_list);
 
         invCode = getIntent().getStringExtra("invCode");
@@ -55,7 +60,7 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
 
         Button scanCam = findViewById(R.id.scan);
         scanCam.setVisibility(cameraScanning ? VISIBLE : GONE);
-        scanCam.setOnClickListener(v -> barcodeResultLauncher.launch(1));
+        scanCam.setOnClickListener(v -> openCameraScanner());
         loadData();
     }
 
@@ -64,7 +69,7 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
         InvBarcode invBarcode = new InvBarcode();
         invBarcode.setBarcode(barcode);
         invBarcode.setUomFactor(1);
-        View dialog = LayoutInflater.from(this)
+        View dialog = getLayoutInflater()
                 .inflate(R.layout.edit_barcode_dialog,
                         findViewById(android.R.id.content), false);
         for (InvBarcode existingBarcode : barcodeList) {
@@ -85,7 +90,7 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
         invBarcode.setBarcode(barcode);
         invBarcode.setUomFactor(1);
         invBarcode.setUom(defaultUomCode);
-        View dialog = LayoutInflater.from(this)
+        View dialog = getLayoutInflater()
                 .inflate(R.layout.edit_barcode_dialog,
                         findViewById(android.R.id.content), false);
         showAddBarcodeDialog(invBarcode, dialog);
@@ -94,8 +99,8 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
     public void loadData() {
         showProgressDialog(true);
         new Thread(() -> {
-            barcodeList = getBarcodeList();
-            uomList = getUomList();
+            getBarcodeList();
+            getUomList();
             if (barcodeList != null && uomList != null) runOnUiThread(this::updatePage);
         }).start();
     }
@@ -107,8 +112,7 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
         BarcodeAdapter adapter = new BarcodeAdapter(this, barcodeList);
         barcodeListView.setAdapter(adapter);
         barcodeListView.setOnItemClickListener((parent, view, position, id) -> {
-            View dialog = LayoutInflater.from(this)
-                    .inflate(R.layout.edit_barcode_dialog, parent, false);
+            View dialog = getLayoutInflater().inflate(R.layout.edit_barcode_dialog, parent, false);
             InvBarcode barcode = barcodeList.get(position);
             showEditBarcodeDialog(barcode, dialog);
         });
@@ -166,52 +170,79 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
         dialogBuilder.show();
     }
 
-    private List<InvBarcode> getBarcodeList() {
-        String url = url("inv", "barcode-list");
+    private void getBarcodeList() {
+        String url = createUrl("inv", "barcode-list");
         Map<String, String> parameters = new HashMap<>();
         parameters.put("inv-code", invCode);
-        url = addRequestParameters(url, parameters);
-        return getListData(url, "GET", null, InvBarcode[].class);
+        url = addQueryParameters(url, parameters);
+        try {
+            barcodeList = httpClient.getListData(url, "GET", null, InvBarcode[].class);
+        } catch (CustomException e) {
+            logger.logError(e.toString());
+            runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+        } finally {
+            runOnUiThread(() -> showProgressDialog(false));
+        }
     }
 
-    private List<Uom> getUomList() {
-
-        String url = url("uom", "all");
+    private void getUomList() {
+        String url = createUrl("uom", "all");
         Map<String, String> parameters = new HashMap<>();
-        url = addRequestParameters(url, parameters);
-        return getListData(url, "GET", null, Uom[].class);
+        url = addQueryParameters(url, parameters);
+        try {
+            uomList = httpClient.getListData(url, "GET", null, Uom[].class);
+        } catch (CustomException e) {
+            logger.logError(e.toString());
+            runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+        } finally {
+            runOnUiThread(() -> showProgressDialog(false));
+        }
     }
 
     private void updateBarcodes() {
         showProgressDialog(true);
-        String url = url("inv", "update-barcodes");
-        executeUpdate(url, Request.create(this, barcodeList),
-                message -> showMessageDialog(message.getTitle(), message.getBody(),
-                        message.getIconId()));
+        new Thread(() -> {
+            String url = createUrl("inv", "update-barcodes");
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, Request.create(this, barcodeList));
+                runOnUiThread(() -> showMessageDialog(message.getTitle(), message.getBody(), message.getIconId()));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
+        }).start();
     }
 
     private void checkBarcode(String barcode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("inv", "info-by-barcode");
+            String url = createUrl("inv", "info-by-barcode");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("barcode", barcode);
-            parameters.put("user-id", getUser().getId());
-            url = addRequestParameters(url, parameters);
-            InvInfo invInfo = getSimpleObject(url, "GET", null, InvInfo.class);
-
-            if (invInfo != null) {
-                runOnUiThread(() -> {
-                    if (invInfo.getInvCode() == null) {
-                        addNewBarcode(barcode);
-                        playSound(SOUND_SUCCESS);
-                    } else {
-                        showMessageDialog(getString(R.string.error),
-                                getString(R.string.barcode_already_assigned),
-                                android.R.drawable.ic_dialog_alert);
-                        playSound(SOUND_FAIL);
-                    }
-                });
+            parameters.put("user-id", appUser.getId());
+            url = addQueryParameters(url, parameters);
+            try {
+                InvInfo invInfo = httpClient.getSimpleObject(url, "GET", null, InvInfo.class);
+                if (invInfo != null) {
+                    runOnUiThread(() -> {
+                        if (invInfo.getInvCode() == null) {
+                            addNewBarcode(barcode);
+                            playSound(SOUND_SUCCESS);
+                        } else {
+                            showMessageDialog(getString(R.string.error),
+                                    getString(R.string.barcode_already_assigned),
+                                    ic_dialog_alert);
+                            playSound(SOUND_FAIL);
+                        }
+                    });
+                }
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
             }
         }).start();
     }

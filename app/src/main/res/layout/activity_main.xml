@@ -2,6 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".activity.MainActivity">
@@ -23,7 +24,6 @@
 
 
             <Button
-                android:id="@+id/picking"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:drawableStart="@drawable/cart"
@@ -34,7 +34,6 @@
                 android:textSize="18sp" />
 
             <Button
-                android:id="@+id/packing"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:drawableStart="@drawable/pack"
@@ -45,7 +44,6 @@
                 android:textSize="18sp" />
 
             <Button
-                android:id="@+id/shipping"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:drawableStart="@drawable/transport"
@@ -56,7 +54,6 @@
                 android:textSize="18sp" />
 
             <Button
-                android:id="@+id/inv_approving"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:drawableStart="@drawable/list"
@@ -67,7 +64,6 @@
                 android:textSize="18sp" />
 
             <Button
-                android:id="@+id/product_approving"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:drawableStart="@drawable/list"
@@ -78,7 +74,6 @@
                 android:textSize="18sp" />
 
             <Button
-                android:id="@+id/confirm_delivery"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:drawableStart="@drawable/delivery"
@@ -89,7 +84,6 @@
                 android:textSize="18sp" />
 
             <Button
-                android:id="@+id/purchase_approve"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:drawableStart="@drawable/list"

@@ -1,6 +1,10 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
 import static android.R.drawable.ic_dialog_info;
+import static az.inci.bmsanbar.fragment.PickReportHelper.getPickReportData;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.content.Context;
 import android.content.Intent;
@@ -21,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Doc;
 import az.inci.bmsanbar.model.Trx;
@@ -36,6 +41,7 @@ public class PickDocActivity extends AppBaseActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.pick_doc_layout);
+        setEdgeToEdge();
         docListView = findViewById(R.id.doc_list);
 
         loadFooter();
@@ -71,7 +77,7 @@ public class PickDocActivity extends AppBaseActivity {
 
     @Override
     public void loadData() {
-        docList = dbHelper.getPickDocsByPickUser(getUser().getId());
+        docList = dbHelper.getPickDocsByPickUser(appUser.getId());
         DocAdapter docAdapter = new DocAdapter(this, docList);
         docListView.setAdapter(docAdapter);
         if (docList.isEmpty())
@@ -94,7 +100,7 @@ public class PickDocActivity extends AppBaseActivity {
         report.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 
         report.setOnMenuItemClickListener(item1 -> {
-            showPickDateDialog("pick");
+            getPickReportData(this, "pick");
             return true;
         });
 
@@ -107,32 +113,39 @@ public class PickDocActivity extends AppBaseActivity {
     private void loadTrxFromServer(int mode) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("pick", "get-doc");
+            String url = createUrl("pick", "get-doc");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("pick-user", getUser().getId());
+            parameters.put("pick-user", appUser.getId());
             parameters.put("mode", String.valueOf(mode));
-            url = addRequestParameters(url, parameters);
+            url = addQueryParameters(url, parameters);
 
-            Doc doc = getSimpleObject(url, "GET", null, Doc.class);
-
-            runOnUiThread(() -> {
-                if (doc != null) {
-                    dbHelper.addPickDoc(doc);
-                    for (Trx trx : doc.getTrxList()) {
-                        dbHelper.addPickTrx(trx);
+            try {
+                Doc doc = httpClient.getSimpleObject(url, "GET", null, Doc.class);
+                runOnUiThread(() -> {
+                    if (doc != null) {
+                        dbHelper.addPickDoc(doc);
+                        for (Trx trx : doc.getTrxList()) {
+                            dbHelper.addPickTrx(trx);
+                        }
+                    } else {
+                        showMessageDialog(getString(R.string.info), getString(R.string.no_data),
+                                ic_dialog_info);
+                        playSound(SOUND_FAIL);
                     }
-                } else {
-                    showMessageDialog(getString(R.string.info), getString(R.string.no_data),
-                            ic_dialog_info);
+                    loadData();
+                });
+            } catch (CustomException e) {
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
                     playSound(SOUND_FAIL);
-                }
-                loadData();
-            });
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     class DocAdapter extends ArrayAdapter<Doc> {
-
         DocAdapter(@NonNull Context context, @NonNull List<Doc> objects) {
             super(context, 0, objects);
         }

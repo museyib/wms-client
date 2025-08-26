@@ -17,6 +17,6 @@ public class AppConfig {
     public static final int PURCHASE_ORDER_MODE = 7;
     public static final int VIEW_MODE = 0;
     public static final int NEW_MODE = 1;
-    static final String DB_NAME = "BMS_ANBAR";
-    static final int DB_VERSION = 16;
+    public static final String DB_NAME = "BMS_ANBAR";
+    public static final int DB_VERSION = 16;
 }

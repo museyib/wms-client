@@ -1,4 +1,4 @@
-package az.inci.bmsanbar;
+package az.inci.bmsanbar.util;
 
 import static az.inci.bmsanbar.AppConfig.DB_NAME;
 import static az.inci.bmsanbar.AppConfig.DB_VERSION;

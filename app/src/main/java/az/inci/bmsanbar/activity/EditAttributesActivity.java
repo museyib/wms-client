@@ -1,5 +1,9 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -20,8 +24,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.InvAttribute;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
 
 public class EditAttributesActivity extends AppBaseActivity {
 
@@ -34,6 +40,7 @@ public class EditAttributesActivity extends AppBaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_edit_attributes);
+        setEdgeToEdge();
 
         attributeListView = findViewById(R.id.attribute_list);
 
@@ -51,13 +58,29 @@ public class EditAttributesActivity extends AppBaseActivity {
     public void loadData() {
         showProgressDialog(true);
         new Thread(() -> {
-            attributeList = getAttributeList();
-            if (attributeList != null) runOnUiThread(this::updatePage);
+
+            String url = createUrl("inv", "attribute-list-by-whs");
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put("inv-code", invCode);
+            parameters.put("user-id", appUser.getId());
+            url = addQueryParameters(url, parameters);
+            try {
+                attributeList = httpClient.getListData(url, "GET", null, InvAttribute[].class);
+                if (attributeList != null) runOnUiThread(this::updatePage);
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     public void updatePage() {
-        if (attributeList.size() > 0) {
+        if (!attributeList.isEmpty()) {
             findViewById(R.id.save).setOnClickListener(v -> updateAttributes());
         }
         AttributeAdapter adapter = new AttributeAdapter(this, attributeList);
@@ -85,22 +108,26 @@ public class EditAttributesActivity extends AppBaseActivity {
         dialogBuilder.show();
     }
 
-    private List<InvAttribute> getAttributeList() {
-        String url = url("inv", "attribute-list-by-whs");
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("inv-code", invCode);
-        parameters.put("user-id", getUser().getId());
-        url = addRequestParameters(url, parameters);
-        return getListData(url, "GET", null, InvAttribute[].class);
-    }
-
     private void updateAttributes() {
         showProgressDialog(true);
-        String url = url("inv", "update-attributes");
-        executeUpdate(url, attributeList, message -> {
-            finish();
-            showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-        });
+        new Thread(() -> {
+
+            String url = createUrl("inv", "update-attributes");
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, attributeList);
+                runOnUiThread(() -> {
+                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
+        }).start();
     }
 
     private class AttributeAdapter extends ArrayAdapter<InvAttribute> {
@@ -141,10 +168,10 @@ public class EditAttributesActivity extends AppBaseActivity {
                 holder.valueCheck.setVisibility(View.GONE);
             }
 
-            if (((EditAttributesActivity) context).getUser().isLocationFlag() &&
+            if (((EditAttributesActivity) context).appUser.isLocationFlag() &&
                     (attribute.getAttributeId().equals("AT010") ||
                             attribute.getAttributeId().equals("AT011")) ||
-                    !((EditAttributesActivity) context).getUser().isLocationFlag()) {
+                    !((EditAttributesActivity) context).appUser.isLocationFlag()) {
                 convertView.setVisibility(View.VISIBLE);
             } else {
                 convertView.setVisibility(View.GONE);

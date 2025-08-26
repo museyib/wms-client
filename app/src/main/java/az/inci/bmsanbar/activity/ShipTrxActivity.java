@@ -4,7 +4,9 @@ import static android.R.drawable.ic_dialog_alert;
 import static android.text.TextUtils.isEmpty;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.os.Bundle;
@@ -22,8 +24,10 @@ import java.util.List;
 import java.util.Map;
 
 import az.inci.bmsanbar.AppConfig;
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.ShipTrx;
+import az.inci.bmsanbar.model.v2.ResponseMessage;
 import az.inci.bmsanbar.model.v3.CheckShipmentResponse;
 import az.inci.bmsanbar.model.v3.ShipmentRequest;
 import az.inci.bmsanbar.model.v3.ShipmentRequestItem;
@@ -46,6 +50,7 @@ public class ShipTrxActivity extends ScannerSupportActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.ship_trx_layout);
+        setEdgeToEdge();
         int mode = getIntent().getIntExtra("mode", AppConfig.VIEW_MODE);
 
         driverCodeEditText = findViewById(R.id.driver);
@@ -98,7 +103,7 @@ public class ShipTrxActivity extends ScannerSupportActivity {
         }
 
         scanCam.setVisibility(cameraScanning ? VISIBLE : GONE);
-        scanCam.setOnClickListener(v -> barcodeResultLauncher.launch(0));
+        scanCam.setOnClickListener(v -> openCameraScanner());
 
         loadFooter();
     }
@@ -124,14 +129,14 @@ public class ShipTrxActivity extends ScannerSupportActivity {
             this.driverCode = driverCode;
             showProgressDialog(true);
             new Thread(() -> {
-                String url = url("personnel", "get-name");
+                String url = createUrl("personnel", "get-name");
                 Map<String, String> parameters = new HashMap<>();
                 parameters.put("per-code", driverCode);
-                url = addRequestParameters(url, parameters);
-                driverName = getSimpleObject(url, "GET", null, String.class);
-                if (driverName != null)
+                url = addQueryParameters(url, parameters);
+                try {
+                    driverName = httpClient.getSimpleObject(url, "GET", null, String.class);
                     runOnUiThread(() -> {
-                        if (!driverName.isEmpty()) {
+                        if (isEmpty(driverName)) {
                             this.driverCode = driverCode;
                             driverCodeEditText.setText(driverCode);
                             driverNameText.setText(driverName);
@@ -143,6 +148,16 @@ public class ShipTrxActivity extends ScannerSupportActivity {
                             playSound(SOUND_FAIL);
                         }
                     });
+                } catch (CustomException e) {
+                    logger.logError(e.toString());
+                    runOnUiThread(() -> {
+                        showMessageDialog(getString(R.string.error), e.toString(),
+                                ic_dialog_alert);
+                        playSound(SOUND_FAIL);
+                    });
+                } finally {
+                    runOnUiThread(() -> showProgressDialog(false));
+                }
             }).start();
         } else {
             showMessageDialog(getString(R.string.error), getString(R.string.driver_code_incorrect),
@@ -184,7 +199,7 @@ public class ShipTrxActivity extends ScannerSupportActivity {
         trx.setDriverName(driverName);
         trx.setVehicleCode(vehicleCode);
         trx.setRegionCode("SHR0000001");
-        trx.setUserId(getUser().getId());
+        trx.setUserId(appUser.getId());
         trx.setTaxed(taxed);
 
         if (checkModeOn) {
@@ -210,55 +225,72 @@ public class ShipTrxActivity extends ScannerSupportActivity {
     private void checkShipment(String trxNo) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("shipment", "check-shipment");
+            String url = createUrl("shipment", "check-shipment");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("trx-no", trxNo);
             parameters.put("driver-code", driverCode);
-            url = addRequestParameters(url, parameters);
-            CheckShipmentResponse shipmentResponse = getSimpleObject(url, "GET", null,
-                    CheckShipmentResponse.class);
-
-            if (shipmentResponse != null)
+            url = addQueryParameters(url, parameters);
+            try {
+                CheckShipmentResponse shipmentResponse = httpClient.getSimpleObject(url, "GET", null,
+                        CheckShipmentResponse.class);
                 runOnUiThread(() -> {
-                    if (checkModeOn || !shipmentResponse.isShipped()) {
-                        if (trxNo.startsWith("DLV") || trxNo.startsWith("SIN"))
-                            checkTaxed(trxNo);
-                        else
-                            addDoc(trxNo, false);
-                        playSound(SOUND_SUCCESS);
-                    } else {
-                        showMessageDialog(getString(R.string.error),
-                                "Bu sənəd yüklənib: " + shipmentResponse.getDriverCode() +
-                                        " - " + shipmentResponse.getDriverName(),
-                                ic_dialog_alert);
-                        playSound(SOUND_FAIL);
+                    if (shipmentResponse != null) {
+                        if (checkModeOn || !shipmentResponse.isShipped()) {
+                            if (trxNo.startsWith("DLV") || trxNo.startsWith("SIN"))
+                                checkTaxed(trxNo);
+                            else
+                                addDoc(trxNo, false);
+                            playSound(SOUND_SUCCESS);
+                        } else {
+                            showMessageDialog(getString(R.string.error),
+                                    "Bu sənəd yüklənib: " + shipmentResponse.getDriverCode() +
+                                            " - " + shipmentResponse.getDriverName(),
+                                    ic_dialog_alert);
+                            playSound(SOUND_FAIL);
+                        }
                     }
                 });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void checkTaxed(String trxNo) {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("doc", "taxed");
+            String url = createUrl("doc", "taxed");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("trx-no", trxNo);
-            url = addRequestParameters(url, parameters);
-            Boolean result = getSimpleObject(url, "GET", null, Boolean.class);
-            if (result != null)
-                runOnUiThread(() -> addDoc(trxNo, result));
+            url = addQueryParameters(url, parameters);
+            try {
+                Boolean result = httpClient.getSimpleObject(url, "GET", null, Boolean.class);
+                if (result != null)
+                    runOnUiThread(() -> addDoc(trxNo, result));
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     public void createShipment() {
         showProgressDialog(true);
         String shipStatus = toCentral ? "MG" : "AC";
-        String url = url("shipment", "create-shipment");
+        String url = createUrl("shipment", "create-shipment");
         ShipmentRequest request = ShipmentRequest.builder()
                 .regionCode(trxList.get(0).getRegionCode())
                 .driverCode(trxList.get(0).getDriverCode())
                 .vehicleCode(trxList.get(0).getVehicleCode())
-                .userId(getUser().getId())
+                .userId(appUser.getId())
                 .build();
         List<ShipmentRequestItem> requestItems = new ArrayList<>();
         for (ShipTrx trx : trxList) {
@@ -270,15 +302,26 @@ public class ShipTrxActivity extends ScannerSupportActivity {
         }
         request.setRequestItems(requestItems);
 
-        executeUpdate(url, request, message -> {
-            showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+        try {
+            ResponseMessage message = httpClient.executeUpdate(url, request);
+            runOnUiThread(() -> {
+                showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
 
-            if (message.getStatusCode() == 0) {
-                dbHelper.deleteShipTrxByDriver(driverCode);
-                clearFields();
-            } else
+                if (message.getStatusCode() == 0) {
+                    dbHelper.deleteShipTrxByDriver(driverCode);
+                    clearFields();
+                } else
+                    playSound(SOUND_FAIL);
+            });
+        } catch (CustomException e) {
+            logger.logError(e.toString());
+            runOnUiThread(() -> {
+                showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
                 playSound(SOUND_FAIL);
-        });
+            });
+        } finally {
+            runOnUiThread(() -> showProgressDialog(false));
+        }
     }
 
 

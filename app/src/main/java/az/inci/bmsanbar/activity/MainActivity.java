@@ -1,14 +1,7 @@
 package az.inci.bmsanbar.activity;
 
-import static android.Manifest.permission.READ_MEDIA_AUDIO;
-import static android.Manifest.permission.READ_MEDIA_IMAGES;
-import static android.Manifest.permission.READ_MEDIA_VIDEO;
-import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
 import static android.R.drawable.ic_dialog_alert;
 import static android.R.drawable.ic_dialog_info;
-import static android.content.pm.PackageManager.PERMISSION_DENIED;
-import static android.os.Build.VERSION.SDK_INT;
-import static android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION;
 import static az.inci.bmsanbar.AppConfig.APPROVE_MODE;
 import static az.inci.bmsanbar.AppConfig.CONFIRM_DELIVERY_MODE;
 import static az.inci.bmsanbar.AppConfig.INV_ATTRIBUTE_MODE;
@@ -17,16 +10,17 @@ import static az.inci.bmsanbar.AppConfig.PICK_MODE;
 import static az.inci.bmsanbar.AppConfig.PRODUCT_APPROVE_MODE;
 import static az.inci.bmsanbar.AppConfig.PURCHASE_ORDER_MODE;
 import static az.inci.bmsanbar.AppConfig.SHIP_MODE;
-import static az.inci.bmsanbar.GlobalParameters.apiVersion;
-import static az.inci.bmsanbar.GlobalParameters.cameraScanning;
-import static az.inci.bmsanbar.GlobalParameters.connectionTimeout;
-import static az.inci.bmsanbar.GlobalParameters.imageUrl;
-import static az.inci.bmsanbar.GlobalParameters.serviceUrl;
+import static az.inci.bmsanbar.util.GlobalParameters.apiVersion;
+import static az.inci.bmsanbar.util.GlobalParameters.cameraScanning;
+import static az.inci.bmsanbar.util.GlobalParameters.connectionTimeout;
+import static az.inci.bmsanbar.util.GlobalParameters.imageUrl;
+import static az.inci.bmsanbar.util.GlobalParameters.serviceUrl;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
 
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Base64;
@@ -38,7 +32,6 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 
 import androidx.appcompat.app.AlertDialog;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
@@ -50,20 +43,23 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.User;
 import az.inci.bmsanbar.model.v2.LoginRequest;
 
 public class MainActivity extends AppBaseActivity {
-    String id;
-    String password;
+    private int mode;
+    private String userId;
+    private String password;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        setEdgeToEdge();
 
-        id = preferences.getString("last_login_id", "");
+        userId = preferences.getString("last_login_id", "");
         password = preferences.getString("last_login_password", "");
     }
 
@@ -128,37 +124,6 @@ public class MainActivity extends AppBaseActivity {
         return true;
     }
 
-    protected void enableStorageAccess() {
-        String[] permissions;
-        if (SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions = new String[]{
-                    READ_MEDIA_AUDIO,
-                    READ_MEDIA_IMAGES,
-                    READ_MEDIA_VIDEO
-            };
-        } else
-            permissions = new String[]{WRITE_EXTERNAL_STORAGE};
-        if (!permissionsGranted(permissions)) {
-            ActivityCompat.requestPermissions(this, permissions, 1);
-            Intent intent;
-            if (SDK_INT >= Build.VERSION_CODES.R) {
-                intent = new Intent(ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                Uri uri = Uri.fromParts("package", getPackageName(), null);
-                intent.setData(uri);
-                startActivity(intent);
-            }
-        }
-    }
-
-    private boolean permissionsGranted(String[] permissions) {
-        for (String permission : permissions) {
-            if (ActivityCompat.checkSelfPermission(this, permission) == PERMISSION_DENIED)
-                return false;
-        }
-
-        return true;
-    }
-
     public void openPickingDocs(View view) {
         showLoginDialog(PICK_MODE);
     }
@@ -189,8 +154,7 @@ public class MainActivity extends AppBaseActivity {
 
     private void showLoginDialog(int mode) {
         this.mode = mode;
-        View view = getLayoutInflater().inflate(R.layout.login_page,
-                findViewById(android.R.id.content), false);
+        View view = getLayoutInflater().inflate(R.layout.login_page, null);
 
         EditText idEdit = view.findViewById(R.id.id_edit);
         EditText passwordEdit = view.findViewById(R.id.password_edit);
@@ -200,7 +164,7 @@ public class MainActivity extends AppBaseActivity {
         fromServerCheck.setOnCheckedChangeListener(
                 (buttonView, isChecked) -> loginViaServer.set(isChecked));
 
-        idEdit.setText(id);
+        idEdit.setText(userId);
         idEdit.selectAll();
         passwordEdit.setText(password);
 
@@ -209,17 +173,15 @@ public class MainActivity extends AppBaseActivity {
         dialogBuilder.setTitle(R.string.enter)
                 .setView(view)
                 .setPositiveButton(R.string.enter, (dialog, which) -> {
-                    id = idEdit.getText().toString().toUpperCase();
+                    userId = idEdit.getText().toString().toUpperCase();
                     password = passwordEdit.getText().toString();
 
-                    if (id.isEmpty() || password.isEmpty()) {
+                    if (userId.isEmpty() || password.isEmpty()) {
                         showToastMessage(getString(R.string.username_or_password_not_entered));
                         showLoginDialog(mode);
                         playSound(SOUND_FAIL);
                     } else {
                         loginViaServer();
-
-                        dialog.dismiss();
                     }
                 });
 
@@ -229,13 +191,13 @@ public class MainActivity extends AppBaseActivity {
         loginDialog.show();
     }
 
-    private void attemptLogin(User user) {
-        preferences.edit().putString("last_login_id", id).apply();
+    private void attemptLogin() {
+        preferences.edit().putString("last_login_id", userId).apply();
         preferences.edit().putString("last_login_password", password).apply();
         Class<?> aClass;
         switch (mode) {
             case PICK_MODE:
-                if (!user.isPickFlag()) {
+                if (!appUser.isPickFlag()) {
                     showMessageDialog(getString(R.string.warning),
                             getString(R.string.not_allowed),
                             ic_dialog_alert);
@@ -245,7 +207,7 @@ public class MainActivity extends AppBaseActivity {
                 aClass = PickDocActivity.class;
                 break;
             case PACK_MODE:
-                if (!user.isPackFlag()) {
+                if (!appUser.isPackFlag()) {
                     showMessageDialog(getString(R.string.warning),
                             getString(R.string.not_allowed),
                             ic_dialog_alert);
@@ -255,7 +217,7 @@ public class MainActivity extends AppBaseActivity {
                 aClass = PackDocActivity.class;
                 break;
             case SHIP_MODE:
-                if (!user.isLoadingFlag()) {
+                if (!appUser.isLoadingFlag()) {
                     showMessageDialog(getString(R.string.warning),
                             getString(R.string.not_allowed),
                             ic_dialog_alert);
@@ -265,7 +227,7 @@ public class MainActivity extends AppBaseActivity {
                 aClass = ShipDocActivity.class;
                 break;
             case APPROVE_MODE:
-                if (!user.isApproveFlag()) {
+                if (!appUser.isApproveFlag()) {
                     showMessageDialog(getString(R.string.warning),
                             getString(R.string.not_allowed),
                             ic_dialog_alert);
@@ -275,7 +237,7 @@ public class MainActivity extends AppBaseActivity {
                 aClass = InternalUseDocActivity.class;
                 break;
             case PRODUCT_APPROVE_MODE:
-                if (!(user.isApproveFlag() || user.isApprovePrdFlag())) {
+                if (!(appUser.isApproveFlag() || appUser.isApprovePrdFlag())) {
                     showMessageDialog(getString(R.string.warning),
                             getString(R.string.not_allowed),
                             ic_dialog_alert);
@@ -288,7 +250,7 @@ public class MainActivity extends AppBaseActivity {
                 aClass = InventoryInfoActivity.class;
                 break;
             case CONFIRM_DELIVERY_MODE:
-                if (!user.isLoadingFlag()) {
+                if (!appUser.isLoadingFlag()) {
                     showMessageDialog(getString(R.string.warning),
                             getString(R.string.not_allowed),
                             ic_dialog_alert);
@@ -298,7 +260,7 @@ public class MainActivity extends AppBaseActivity {
                 aClass = ConfirmDeliveryActivity.class;
                 break;
             case PURCHASE_ORDER_MODE:
-                if (!user.isPurchaseOrdersFlag()) {
+                if (!appUser.isPurchaseOrdersFlag()) {
                     showMessageDialog(getString(R.string.warning),
                             getString(R.string.not_allowed),
                             ic_dialog_alert);
@@ -317,18 +279,24 @@ public class MainActivity extends AppBaseActivity {
     private void loginViaServer() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("user", "login");
+            String url = createUrl("user", "login");
             LoginRequest request = new LoginRequest();
-            request.setUserId(id);
+            request.setUserId(userId);
             request.setPassword(password);
-            User user = getSimpleObject(url, "POST", request, User.class);
-            runOnUiThread(() -> {
-                if (user != null) {
-                    user.setId(user.getId().toUpperCase());
-                    loadUserInfo(user);
-                    attemptLogin(user);
-                }
-            });
+            try {
+                appUser = httpClient.getSimpleObject(url, "POST", request, User.class);
+                runOnUiThread(() -> {
+                    if (appUser != null) {
+                        appUser.setId(appUser.getId().toUpperCase());
+                        attemptLogin();
+                    }
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
@@ -342,39 +310,47 @@ public class MainActivity extends AppBaseActivity {
             } catch (PackageManager.NameNotFoundException e) {
                 version = 0;
             }
-            String url = url("app-version", "check");
+            String url = createUrl("app-version", "check");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("app-name", "BMSAnbar");
             parameters.put("current-version", String.valueOf(version));
-            url = addRequestParameters(url, parameters);
-            Boolean newVersionAvailable = getSimpleObject(url, "GET", null, Boolean.class);
-            if (newVersionAvailable != null)
+            url = addQueryParameters(url, parameters);
+            try {
+                Boolean newVersionAvailable = httpClient.getSimpleObject(url, "GET", null, Boolean.class);
                 runOnUiThread(() -> {
-                    if (newVersionAvailable)
+                    if (newVersionAvailable != null && newVersionAvailable)
                         getApkFile();
                     else
-                        showMessageDialog(getString(R.string.info), getString(R.string.no_new_version),
-                                ic_dialog_info);
+                        showMessageDialog(getString(R.string.info), getString(R.string.no_new_version), ic_dialog_info);
                 });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
         }).start();
     }
 
     private void getApkFile() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("download");
+            String url = createUrl("download");
             Map<String, String> parameters = new HashMap<>();
             parameters.put("file-name", "BMSAnbar");
-            url = addRequestParameters(url, parameters);
+            url = addQueryParameters(url, parameters);
             try {
-                String bytes = getSimpleObject(url, "GET", null, String.class);
+                String bytes = httpClient.getSimpleObject(url, "GET", null, String.class);
                 if (bytes != null) {
                     byte[] fileBytes = android.util.Base64.decode(bytes, Base64.DEFAULT);
                     if (fileBytes != null)
                         runOnUiThread(() -> installApp(fileBytes));
                 }
-            } catch (RuntimeException e) {
+            } catch (CustomException e) {
+                logger.logError(e.toString());
                 runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
             }
         }).start();
     }
@@ -406,18 +382,10 @@ public class MainActivity extends AppBaseActivity {
 
         Intent installIntent;
         Uri uri;
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            installIntent = new Intent(Intent.ACTION_VIEW);
-            uri = Uri.fromFile(file);
-            installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            installIntent.setDataAndType(uri, "application/vnd.android.package-archive");
-        } else {
-            installIntent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-            uri = FileProvider.getUriForFile(this, "az.inci.bmsanbar.provider",
-                    file);
-            installIntent.setData(uri);
-            installIntent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        }
+        installIntent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+        uri = FileProvider.getUriForFile(this, "az.inci.bmsanbar.provider", file);
+        installIntent.setData(uri);
+        installIntent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         startActivity(installIntent);
     }
 }

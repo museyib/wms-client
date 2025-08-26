@@ -5,6 +5,8 @@ import static android.R.drawable.ic_dialog_alert;
 import static android.content.pm.PackageManager.PERMISSION_DENIED;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
+import static az.inci.bmsanbar.fragment.InvBarcodeHelper.requestInvBarcode;
+
 import android.content.Intent;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraDevice;
@@ -270,7 +272,7 @@ public class BarcodeScannerCamera extends AppBaseActivity {
         if (trx != null) {
             updateScannedItemForPick(trx);
         } else {
-            getInvBarcodeFromServer(barcode, this::checkInvBarcodeForPick);
+            requestInvBarcode(this, barcode, this::checkInvBarcodeForPick);
         }
     }
 
@@ -279,7 +281,7 @@ public class BarcodeScannerCamera extends AppBaseActivity {
         if (trx != null) {
             updateScannedItemForPack(trx);
         } else {
-            getInvBarcodeFromServer(barcode, this::checkInvBarcodeForPack);
+            requestInvBarcode(this, barcode, this::checkInvBarcodeForPack);
         }
     }
 

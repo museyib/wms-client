@@ -15,7 +15,6 @@
     <uses-feature android:name="android.hardware.usb.accessory" />
 
     <application
-        android:name=".App"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_descriptor"
@@ -61,7 +60,8 @@
 
         <activity
             android:name=".activity.InventoryInfoActivity"
-            android:label="@string/inv_attributes" />
+            android:label="@string/inv_attributes"
+            android:windowSoftInputMode="adjustPan"/>
         <activity android:name=".activity.ScannerSupportActivity" />
         <activity android:name=".activity.SettingsActivity" />
         <activity

@@ -18,8 +18,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-import az.inci.bmsanbar.Logger;
 import az.inci.bmsanbar.R;
+import az.inci.bmsanbar.util.Logger;
 
 public class LogViewActivity extends AppBaseActivity {
     File currentLogFile;
@@ -29,6 +29,8 @@ public class LogViewActivity extends AppBaseActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_log_view);
+        setEdgeToEdge();
+
         currentLogFile = new Logger(this).getFile();
         logFiles = getLogFiles();
         displayLog();

@@ -1,5 +1,9 @@
 package az.inci.bmsanbar.activity;
 
+import static android.R.drawable.ic_dialog_alert;
+import static az.inci.bmsanbar.util.UrlConstructor.addQueryParameters;
+import static az.inci.bmsanbar.util.UrlConstructor.createUrl;
+
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -16,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import az.inci.bmsanbar.CustomException;
 import az.inci.bmsanbar.R;
 import az.inci.bmsanbar.model.Doc;
 
@@ -28,7 +33,7 @@ public class WaitingPackDocActivity extends AppBaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_open_pack_doc);
-
+        setEdgeToEdge();
         docListView = findViewById(R.id.doc_list);
         docListView.setOnItemClickListener((adapterView, view, i, l) -> {
             Doc doc = (Doc) view.getTag();
@@ -45,7 +50,7 @@ public class WaitingPackDocActivity extends AppBaseActivity {
     public void loadData() {
         DocAdapter docAdapter = new DocAdapter(this, R.layout.pack_doc_item_layout, docList);
         docListView.setAdapter(docAdapter);
-        if (docList.size() == 0) {
+        if (docList.isEmpty()) {
             findViewById(R.id.header).setVisibility(View.GONE);
         } else {
             findViewById(R.id.header).setVisibility(View.VISIBLE);
@@ -55,13 +60,20 @@ public class WaitingPackDocActivity extends AppBaseActivity {
     public void getNewDocs() {
         showProgressDialog(true);
         new Thread(() -> {
-            String url = url("pack", "waiting-docs");
+            String url = createUrl("pack", "waiting-docs");
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("user-id", getUser().getId());
-            url = addRequestParameters(url, parameters);
-            docList = getListData(url, "GET", null, Doc[].class);
-            if (docList != null) {
-                runOnUiThread(this::loadData);
+            parameters.put("user-id", appUser.getId());
+            url = addQueryParameters(url, parameters);
+            try {
+                docList = httpClient.getListData(url, "GET", null, Doc[].class);
+                if (docList != null) {
+                    runOnUiThread(this::loadData);
+                }
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
             }
         }).start();
     }
