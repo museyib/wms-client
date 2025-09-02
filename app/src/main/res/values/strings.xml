@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">BMS Anbar</string>
+    <string name="app_name">WMS Anbar</string>
     <string name="picking">Yığım</string>
     <string name="packing">Yoxlama / Paketləmə</string>
     <string name="transport">Daşıma / Çatdırılma</string>

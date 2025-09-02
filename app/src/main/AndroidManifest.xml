@@ -108,7 +108,7 @@
         <activity android:name=".activity.InternalUseTrxActivity" />
         <activity android:name=".activity.ConfirmDeliveryActivity" />
         <activity android:name=".activity.BarcodeScannerCamera" />
-        <activity android:name="az.inci.bmsanbar.activity.LogViewActivity" />
+        <activity android:name=".activity.LogViewActivity" />
     </application>
 
 </manifest>

@@ -3,21 +3,21 @@ apply plugin: 'com.android.application'
 android {
     signingConfigs {
         debug {
-            storeFile file('C:\\Users\\User\\StudioProjects\\bmsdroid.jks')
+            storeFile file('C:\\Users\\User\\StudioProjects\\wmsclient.jks')
             storePassword 'Aa123456'
-            keyAlias 'bmsdroid'
+            keyAlias 'wmsclient'
             keyPassword 'Aa123456'
         }
         release {
-            storeFile file('C:\\Users\\User\\StudioProjects\\bmsdroid.jks')
+            storeFile file('C:\\Users\\User\\StudioProjects\\wmsclient.jks')
             storePassword 'Aa123456'
-            keyAlias 'bmsdroid'
+            keyAlias 'wmsclient'
             keyPassword 'Aa123456'
         }
     }
 
     defaultConfig {
-        applicationId "az.inci.bmsanbar"
+        applicationId "az.inci.wmsclient"
         minSdkVersion 24
         compileSdkVersion 36
         targetSdkVersion 36
@@ -54,7 +54,7 @@ android {
         targetCompatibility = 1.8
         encoding = 'UTF-8'
     }
-    namespace 'az.inci.bmsanbar'
+    namespace 'az.inci.wmsclient'
 
 }
 

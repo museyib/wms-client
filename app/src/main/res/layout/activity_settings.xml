@@ -7,7 +7,7 @@
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/settings_container"
-        android:name="az.inci.bmsanbar.fragment.SettingsFragment"
+        android:name="az.inci.wmsclient.fragment.SettingsFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
