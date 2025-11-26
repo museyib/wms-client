@@ -31,7 +31,7 @@ import az.inci.wmsclient.CustomException;
 import az.inci.wmsclient.R;
 import az.inci.wmsclient.model.InvBarcode;
 import az.inci.wmsclient.model.Uom;
-import az.inci.wmsclient.model.v2.InvInfo;
+import az.inci.wmsclient.model.Inventory;
 import az.inci.wmsclient.model.v2.ResponseMessage;
 import az.inci.wmsclient.model.v4.Request;
 
@@ -224,10 +224,10 @@ public class EditBarcodesActivity extends ScannerSupportActivity {
             parameters.put("user-id", appUser.getId());
             url = addQueryParameters(url, parameters);
             try {
-                InvInfo invInfo = httpClient.getSimpleObject(url, "GET", null, InvInfo.class);
-                if (invInfo != null) {
+                Inventory Inventory = httpClient.getSimpleObject(url, "GET", null, Inventory.class);
+                if (Inventory != null) {
                     runOnUiThread(() -> {
-                        if (invInfo.getInvCode() == null) {
+                        if (Inventory.getInvCode() == null) {
                             addNewBarcode(barcode);
                             playSound(SOUND_SUCCESS);
                         } else {

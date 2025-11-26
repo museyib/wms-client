@@ -60,7 +60,7 @@
 
         <activity
             android:name=".activity.InventoryInfoActivity"
-            android:label="@string/inv_attributes"
+            android:label="@string/inventory_info"
             android:windowSoftInputMode="adjustPan"/>
         <activity android:name=".activity.ScannerSupportActivity" />
         <activity android:name=".activity.SettingsActivity" />

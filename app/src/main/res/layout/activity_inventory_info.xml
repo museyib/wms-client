@@ -53,7 +53,7 @@
                 android:layout_height="wrap_content"
                 android:enabled="false"
                 android:gravity="start|top"
-                android:paddingBottom="200dp"
+                android:paddingBottom="150dp"
                 android:textColor="@android:color/black"
                 android:textSize="24sp" />
         </ScrollView>
@@ -69,58 +69,75 @@
         app:layout_constraintStart_toStartOf="parent">
 
         <Button
-            android:id="@+id/scan_cam"
+            android:id="@+id/edit_inv_data"
+            style="?android:attr/buttonBarButtonStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/camera_scanner"
-            android:textAllCaps="false"
-            android:visibility="invisible"
-            app:layout_constraintVertical_bias="1.0" />
+            android:text="@string/edit"
+            android:textAllCaps="false" />
 
         <LinearLayout
+            style="?android:attr/buttonBarStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <Button
+                android:id="@+id/latest_movements"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:text="@string/latest_movements"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/photo"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="@string/image"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/scan_cam"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/camera_scanner"
+                android:textAllCaps="false"
+                android:visibility="invisible"
+                app:layout_constraintVertical_bias="1.0" />
+        </LinearLayout>
+
+        <LinearLayout
+            style="?android:attr/buttonBarStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
             <Button
                 android:id="@+id/edit_attributes"
-                android:layout_width="wrap_content"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="100dp"
                 android:layout_height="wrap_content"
-                android:text="@string/edit_attributes"
-                android:textAllCaps="false"
-                tools:ignore="ButtonStyle" />
+                android:text="@string/attributes"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/edit_barcodes"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:text="@string/barcodes"
+                android:textAllCaps="false" />
 
             <Button
                 android:id="@+id/edit_shelf_location"
-                android:layout_width="wrap_content"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="120dp"
                 android:layout_height="wrap_content"
-                android:layout_gravity="end"
                 android:text="@string/shelf_location"
-                android:textAllCaps="false"
-                tools:ignore="ButtonStyle" />
+                android:textAllCaps="false" />
 
         </LinearLayout>
-
-        <Button
-            android:id="@+id/latest_movements"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/latest_movements"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/edit_barcodes"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/edit_barcodes"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/photo"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:text="@string/image"
-            android:textAllCaps="false" />
 
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

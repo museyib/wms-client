@@ -22,4 +22,5 @@ public class User {
     private boolean approvePrdFlag;
     private boolean purchaseOrdersFlag;
     private boolean barcodeFlag;
+    private boolean changeInvMasterFlag;
 }

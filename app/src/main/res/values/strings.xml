@@ -122,4 +122,10 @@
     <string name="clear_logs">Loqları təmizlə</string>
     <string name="share">Paylaş</string>
     <string name="logs">Loqlar</string>
+    <string name="change_brand">Brendi dəyiş</string>
+    <string name="attributes">Atributlar</string>
+    <string name="barcodes">Barkodlar</string>
+    <string name="edit">Redaktə et</string>
+    <string name="inventory_info">İnventar məlumatları</string>
+    <string name="brand_not_selected">Brend seçilməyib</string>
 </resources>

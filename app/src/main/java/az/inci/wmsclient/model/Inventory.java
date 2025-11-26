@@ -16,6 +16,8 @@ public class Inventory {
     private String defaultUomCode;
     private double price;
     private double whsQty;
+    private String info;
+    private String whsCode;
 
     public static Inventory parseFromTrx(Trx trx) {
         Inventory inventory = new Inventory();
