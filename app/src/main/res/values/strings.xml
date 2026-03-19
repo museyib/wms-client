@@ -98,8 +98,8 @@
     <string name="edit_barcodes">Barkodlara düzəliş</string>
     <string name="barcode_already_assigned">Bu barkod artıq başqa malda tanıdılıb!</string>
     <string name="reset">Geri göndər</string>
-    <string name="shelf_location">Vitrin yerləşməsi</string>
-    <string name="shelf_barcode">Vitrin barkodu</string>
+    <string name="whs_location">Anbar yerləşməsi</string>
+    <string name="location_barcode">Ünvan barkodu</string>
     <string name="internal_use">Daxili istifadə</string>
     <string name="check_mode">Yoxlama rejimi</string>
     <string name="not_shipped_for_current_driver">Bu sənəd cari sürücü üçün yükləməyə verilməyib!</string>

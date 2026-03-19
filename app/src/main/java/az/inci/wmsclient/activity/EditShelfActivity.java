@@ -14,6 +14,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ListView;
+import android.widget.Spinner;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,6 +23,7 @@ import java.util.Map;
 
 import az.inci.wmsclient.CustomException;
 import az.inci.wmsclient.R;
+import az.inci.wmsclient.model.InvAttribute;
 import az.inci.wmsclient.model.Inventory;
 import az.inci.wmsclient.model.v2.ResponseMessage;
 
@@ -29,6 +31,7 @@ public class EditShelfActivity extends ScannerSupportActivity {
     private final List<Inventory> inventoryList = new ArrayList<>();
     private EditText shelfBarcodeEdit;
     private ListView invListView;
+    private Spinner attributeSpinner;
     private String shelfBarcode = "";
 
     @Override
@@ -39,6 +42,18 @@ public class EditShelfActivity extends ScannerSupportActivity {
 
         shelfBarcodeEdit = findViewById(R.id.shelf_barcode);
         invListView = findViewById(R.id.inv_list_view);
+        attributeSpinner = findViewById(R.id.attribute_list);
+
+        InvAttribute shelf = new InvAttribute();
+        shelf.setAttributeId("AT010");
+        shelf.setAttributeName("Rəf kodu");
+        InvAttribute palet = new InvAttribute();
+        palet.setAttributeId("AT011");
+        palet.setAttributeName("Palet kodu");
+        InvAttribute stock = new InvAttribute();
+        stock.setAttributeId("AT012");
+        stock.setAttributeName("Stok kodu");
+        attributeSpinner.setAdapter(new ArrayAdapter<>(this, R.layout.support_simple_spinner_dropdown_item, List.of(shelf, palet, stock)));
 
         Button scanCam = findViewById(R.id.scan_cam);
         ImageButton sendBtn = findViewById(R.id.send);
@@ -157,8 +172,10 @@ public class EditShelfActivity extends ScannerSupportActivity {
         showProgressDialog(true);
         new Thread(() -> {
             String url = createUrl("inv", "update-shelf-barcode");
+            InvAttribute item = (InvAttribute) attributeSpinner.getSelectedItem();
             Map<String, String> parameters = new HashMap<>();
             parameters.put("whs-code", appUser.getWhsCode());
+            parameters.put("inv-attrib-id", item.getAttributeId());
             parameters.put("shelf-barcode", shelfBarcode.replaceFirst("#", "%23"));
             url = addQueryParameters(url, parameters);
 
@@ -168,7 +185,11 @@ public class EditShelfActivity extends ScannerSupportActivity {
             }
             try {
                 ResponseMessage message = httpClient.executeUpdate(url, barcodeList);
-                runOnUiThread(() -> showMessageDialog(message.getTitle(), message.getBody(), message.getIconId()));
+                runOnUiThread(() -> {
+                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                    if (message.getStatusCode() == 0)
+                        clearAndRefreshList();
+                });
             } catch (CustomException e) {
                 logger.logError(e.toString());
                 runOnUiThread(() -> {

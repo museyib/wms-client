@@ -12,7 +12,7 @@
         android:layout_margin="5dp"
         android:ems="5"
         android:enabled="false"
-        android:hint="@string/shelf_barcode"
+        android:hint="@string/location_barcode"
         android:importantForAutofill="no"
         android:inputType="textPersonName"
         android:textColor="@android:color/black"
@@ -30,16 +30,23 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@android:drawable/ic_notification_clear_all" />
 
+    <Spinner
+        android:id="@+id/attribute_list"
+        android:layout_width="409dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/shelf_barcode" />
+
     <Button
         android:id="@+id/scan_cam"
         android:layout_width="wrap_content"
         android:layout_height="50dp"
         android:layout_margin="5dp"
-        android:contentDescription="@string/shelf_barcode"
+        android:contentDescription="@string/location_barcode"
         android:text="@string/scan"
         android:visibility="invisible"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/shelf_barcode" />
+        app:layout_constraintTop_toBottomOf="@+id/attribute_list" />
 
     <ImageButton
         android:id="@+id/send"
@@ -48,7 +55,7 @@
         android:layout_margin="5dp"
         android:contentDescription="@string/send"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/shelf_barcode"
+        app:layout_constraintTop_toBottomOf="@id/attribute_list"
         app:srcCompat="@android:drawable/ic_menu_upload" />
 
     <HorizontalScrollView

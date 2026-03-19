@@ -53,7 +53,7 @@
                 android:layout_height="wrap_content"
                 android:enabled="false"
                 android:gravity="start|top"
-                android:paddingBottom="150dp"
+                android:paddingBottom="180dp"
                 android:textColor="@android:color/black"
                 android:textSize="24sp" />
         </ScrollView>
@@ -130,11 +130,11 @@
                 android:textAllCaps="false" />
 
             <Button
-                android:id="@+id/edit_shelf_location"
+                android:id="@+id/edit_whs_location"
                 style="?android:attr/buttonBarButtonStyle"
                 android:layout_width="120dp"
                 android:layout_height="wrap_content"
-                android:text="@string/shelf_location"
+                android:text="@string/whs_location"
                 android:textAllCaps="false" />
 
         </LinearLayout>

@@ -61,7 +61,7 @@ public class InventoryInfoActivity extends ScannerSupportActivity {
         Button searchBtn = findViewById(R.id.search);
         Button scanCam = findViewById(R.id.scan_cam);
         Button editAttributes = findViewById(R.id.edit_attributes);
-        Button editShelf = findViewById(R.id.edit_shelf_location);
+        Button editShelf = findViewById(R.id.edit_whs_location);
         Button editBarcodes = findViewById(R.id.edit_barcodes);
         Button viewImage = findViewById(R.id.photo);
         Button editInv = findViewById(R.id.edit_inv_data);
@@ -69,7 +69,7 @@ public class InventoryInfoActivity extends ScannerSupportActivity {
 
         scanCam.setVisibility(cameraScanning ? VISIBLE : GONE);
         searchField.setAdapter(ArrayAdapter.createFromResource(this, R.array.search_field_list,
-                R.layout.spinner_item));
+                R.layout.support_simple_spinner_dropdown_item));
 
         searchBtn.setOnClickListener(v -> searchKeyword());
         scanCam.setOnClickListener(v -> openCameraScanner());
