@@ -284,44 +284,46 @@ public class ShipTrxActivity extends ScannerSupportActivity {
 
     public void createShipment() {
         showProgressDialog(true);
-        String shipStatus = toCentral ? "MG" : "AC";
-        String url = createUrl("shipment", "create-shipment");
-        ShipmentRequest request = ShipmentRequest.builder()
-                .regionCode(trxList.get(0).getRegionCode())
-                .driverCode(trxList.get(0).getDriverCode())
-                .vehicleCode(trxList.get(0).getVehicleCode())
-                .userId(appUser.getId())
-                .build();
-        List<ShipmentRequestItem> requestItems = new ArrayList<>();
-        for (ShipTrx trx : trxList) {
-            ShipmentRequestItem requestItem = ShipmentRequestItem.builder()
-                    .srcTrxNo(trx.getSrcTrxNo())
-                    .shipStatus(shipStatus)
+        new Thread(() -> {
+            String shipStatus = toCentral ? "MG" : "AC";
+            String url = createUrl("shipment", "create-shipment");
+            ShipmentRequest request = ShipmentRequest.builder()
+                    .regionCode(trxList.get(0).getRegionCode())
+                    .driverCode(trxList.get(0).getDriverCode())
+                    .vehicleCode(trxList.get(0).getVehicleCode())
+                    .userId(appUser.getId())
                     .build();
-            requestItems.add(requestItem);
-        }
-        request.setRequestItems(requestItems);
+            List<ShipmentRequestItem> requestItems = new ArrayList<>();
+            for (ShipTrx trx : trxList) {
+                ShipmentRequestItem requestItem = ShipmentRequestItem.builder()
+                        .srcTrxNo(trx.getSrcTrxNo())
+                        .shipStatus(shipStatus)
+                        .build();
+                requestItems.add(requestItem);
+            }
+            request.setRequestItems(requestItems);
 
-        try {
-            ResponseMessage message = httpClient.executeUpdate(url, request);
-            runOnUiThread(() -> {
-                showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, request);
+                runOnUiThread(() -> {
+                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
 
-                if (message.getStatusCode() == 0) {
-                    dbHelper.deleteShipTrxByDriver(driverCode);
-                    clearFields();
-                } else
+                    if (message.getStatusCode() == 0) {
+                        dbHelper.deleteShipTrxByDriver(driverCode);
+                        clearFields();
+                    } else
+                        playSound(SOUND_FAIL);
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
                     playSound(SOUND_FAIL);
-            });
-        } catch (CustomException e) {
-            logger.logError(e.toString());
-            runOnUiThread(() -> {
-                showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
-                playSound(SOUND_FAIL);
-            });
-        } finally {
-            runOnUiThread(() -> showProgressDialog(false));
-        }
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
+        }).start();
     }
 
 

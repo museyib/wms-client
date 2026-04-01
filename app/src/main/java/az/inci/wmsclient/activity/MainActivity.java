@@ -22,7 +22,6 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Base64;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -356,21 +355,12 @@ public class MainActivity extends AppBaseActivity {
     }
 
     private void installApp(byte[] bytes) {
-        File file = new File(
-                Environment.getExternalStorageDirectory().getPath() + "/WMSClient.apk");
-        if (!file.exists()) {
-            try {
-                boolean newFile = file.createNewFile();
-                if (!newFile) {
-                    showMessageDialog(getString(R.string.info),
-                            getString(R.string.error_occurred),
-                            ic_dialog_info);
-                    return;
-                }
-            } catch (IOException e) {
-                showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
-                return;
-            }
+        File file = new File(getExternalFilesDir("/"), "WMSClient.apk");
+        try (FileOutputStream stream = new FileOutputStream(file)) {
+            stream.write(bytes);
+        } catch (Exception e) {
+            showMessageDialog(getString(R.string.info), e.getMessage(), ic_dialog_alert);
+            logger.logError(e.getMessage());
         }
 
         try (FileOutputStream stream = new FileOutputStream(file)) {

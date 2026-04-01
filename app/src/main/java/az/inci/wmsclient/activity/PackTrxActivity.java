@@ -416,37 +416,39 @@ public class PackTrxActivity extends ScannerSupportActivity
 
     private void uploadData() {
         showProgressDialog(true);
-        List<CollectTrxRequest> requestList = new ArrayList<>();
-        for (Trx trx : trxList) {
-            CollectTrxRequest request = new CollectTrxRequest();
-            request.setTrxId(trx.getTrxId());
-            request.setQty(trx.getPackedQty());
-            request.setSeconds(activeSeconds);
-            request.setNotPickedReasonId(trx.getNotPickedReasonId());
-            request.setDeviceId(getDeviceIdString());
-            requestList.add(request);
-        }
+        new Thread(() -> {
+            List<CollectTrxRequest> requestList = new ArrayList<>();
+            for (Trx trx : trxList) {
+                CollectTrxRequest request = new CollectTrxRequest();
+                request.setTrxId(trx.getTrxId());
+                request.setQty(trx.getPackedQty());
+                request.setSeconds(activeSeconds);
+                request.setNotPickedReasonId(trx.getNotPickedReasonId());
+                request.setDeviceId(getDeviceIdString());
+                requestList.add(request);
+            }
 
-        String url = createUrl("pack", "collect");
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("trx-no", trxNo);
-        url = addQueryParameters(url, parameters);
-        try {
-            ResponseMessage message = httpClient.executeUpdate(url, requestList);
-            runOnUiThread(() -> {
-                if (message.getStatusCode() == 0) {
-                    dbHelper.deletePackTrx(trxNo);
-                    finish();
-                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-                } else
-                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-            });
-        } catch (CustomException e) {
-            logger.logError(e.toString());
-            runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
-        } finally {
-            runOnUiThread(() -> showProgressDialog(false));
-        }
+            String url = createUrl("pack", "collect");
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put("trx-no", trxNo);
+            url = addQueryParameters(url, parameters);
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, requestList);
+                runOnUiThread(() -> {
+                    if (message.getStatusCode() == 0) {
+                        dbHelper.deletePackTrx(trxNo);
+                        finish();
+                        showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                    } else
+                        showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert));
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
+        }).start();
     }
 
     private void setNotPickedReasonForTrx(Iterator<Trx> iterator, Trx trx) {

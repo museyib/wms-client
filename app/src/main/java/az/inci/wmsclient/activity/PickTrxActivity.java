@@ -390,70 +390,74 @@ public class PickTrxActivity extends ScannerSupportActivity
 
     private void sendTrx() {
         showProgressDialog(true);
-        List<CollectTrxRequest> requestList = new ArrayList<>();
-        currentSeconds += (int) ((System.currentTimeMillis() - startTime) / 1000);
-        activeSeconds += currentSeconds;
-        for (Trx trx : trxList) {
-            CollectTrxRequest request = new CollectTrxRequest();
-            request.setTrxId(trx.getTrxId());
-            request.setQty(trx.getPickedQty());
-            request.setSeconds(activeSeconds);
-            request.setPickStatus("A");
-            request.setDeviceId(getDeviceIdString());
-            requestList.add(request);
-        }
+        new Thread(() -> {
+            List<CollectTrxRequest> requestList = new ArrayList<>();
+            currentSeconds += (int) ((System.currentTimeMillis() - startTime) / 1000);
+            activeSeconds += currentSeconds;
+            for (Trx trx : trxList) {
+                CollectTrxRequest request = new CollectTrxRequest();
+                request.setTrxId(trx.getTrxId());
+                request.setQty(trx.getPickedQty());
+                request.setSeconds(activeSeconds);
+                request.setPickStatus("A");
+                request.setDeviceId(getDeviceIdString());
+                requestList.add(request);
+            }
 
-        String url = createUrl("pick", "collect");
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("trx-no", null);
-        url = addQueryParameters(url, parameters);
-        try {
-            ResponseMessage message = httpClient.executeUpdate(url, requestList);
-            runOnUiThread(() -> {
-                if (message.getStatusCode() == 0) {
-                    dbHelper.deletePickTrx(trxNo);
-                    finish();
-                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-                } else
-                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
-            });
-        } catch (CustomException e) {
-            logger.logError(e.toString());
-            runOnUiThread(() -> {
-                showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
-                playSound(SOUND_FAIL);
-            });
-        } finally {
-            runOnUiThread(() -> showProgressDialog(false));
-        }
+            String url = createUrl("pick", "collect");
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put("trx-no", null);
+            url = addQueryParameters(url, parameters);
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, requestList);
+                runOnUiThread(() -> {
+                    if (message.getStatusCode() == 0) {
+                        dbHelper.deletePickTrx(trxNo);
+                        finish();
+                        showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                    } else
+                        showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
+                    playSound(SOUND_FAIL);
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
+        }).start();
     }
 
     private void reset() {
         showProgressDialog(true);
-        String url = createUrl("pick", "reset");
-        ResetPickRequest request = new ResetPickRequest();
-        request.setTrxNo(trxNo);
-        request.setUserId(appUser.getId());
-        try {
-            ResponseMessage message = httpClient.executeUpdate(url, request);
-            runOnUiThread(() -> {
-                if (message.getStatusCode() == 0) {
-                    dbHelper.deletePickTrx(trxNo);
-                    finish();
-                } else {
-                    showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+        new Thread(() -> {
+            String url = createUrl("pick", "reset");
+            ResetPickRequest request = new ResetPickRequest();
+            request.setTrxNo(trxNo);
+            request.setUserId(appUser.getId());
+            try {
+                ResponseMessage message = httpClient.executeUpdate(url, request);
+                runOnUiThread(() -> {
+                    if (message.getStatusCode() == 0) {
+                        dbHelper.deletePickTrx(trxNo);
+                        finish();
+                    } else {
+                        showMessageDialog(message.getTitle(), message.getBody(), message.getIconId());
+                        playSound(SOUND_FAIL);
+                    }
+                });
+            } catch (CustomException e) {
+                logger.logError(e.toString());
+                runOnUiThread(() -> {
+                    showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
                     playSound(SOUND_FAIL);
-                }
-            });
-        } catch (CustomException e) {
-            logger.logError(e.toString());
-            runOnUiThread(() -> {
-                showMessageDialog(getString(R.string.error), e.toString(), ic_dialog_alert);
-                playSound(SOUND_FAIL);
-            });
-        } finally {
-            runOnUiThread(() -> showProgressDialog(false));
-        }
+                });
+            } finally {
+                runOnUiThread(() -> showProgressDialog(false));
+            }
+        }).start();
     }
 
     class TrxAdapter extends ArrayAdapter<Trx> implements Filterable {
