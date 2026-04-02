@@ -136,7 +136,7 @@ public class ShipTrxActivity extends ScannerSupportActivity {
                 try {
                     driverName = httpClient.getSimpleObject(url, "GET", null, String.class);
                     runOnUiThread(() -> {
-                        if (isEmpty(driverName)) {
+                        if (!isEmpty(driverName)) {
                             this.driverCode = driverCode;
                             driverCodeEditText.setText(driverCode);
                             driverNameText.setText(driverName);
