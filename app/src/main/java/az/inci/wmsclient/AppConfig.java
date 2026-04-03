@@ -18,5 +18,5 @@ public class AppConfig {
     public static final int VIEW_MODE = 0;
     public static final int NEW_MODE = 1;
     public static final String DB_NAME = "WMSClient.db";
-    public static final int DB_VERSION = 16;
+    public static final int DB_VERSION = 17;
 }

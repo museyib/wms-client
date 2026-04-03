@@ -18,11 +18,11 @@ android {
 
     defaultConfig {
         applicationId "az.inci.wmsclient"
-        minSdkVersion 24
+        minSdkVersion 26
         compileSdkVersion 36
         targetSdkVersion 36
         multiDexEnabled true
-        versionCode 78
+        versionCode 79
         versionName "1.0"
         compileOptions {
             sourceCompatibility JavaVersion.VERSION_1_8
@@ -68,7 +68,7 @@ dependencies {
     implementation files('libs/platform_sdk_v4.1.0326.jar')
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     implementation 'androidx.preference:preference:1.2.1'
-    implementation 'androidx.activity:activity:1.12.4'
+    implementation 'androidx.activity:activity:1.13.0'
     compileOnly(annotationProcessor 'org.projectlombok:lombok:1.18.30')
     implementation('com.squareup.okhttp3:okhttp') {
         version { strictly '3.12.12' }

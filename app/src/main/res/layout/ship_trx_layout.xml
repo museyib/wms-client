@@ -33,6 +33,32 @@
         app:layout_constraintTop_toBottomOf="@id/driver" />
 
     <EditText
+        android:id="@+id/assistant"
+        android:layout_width="wrap_content"
+        android:layout_height="50dp"
+        android:layout_margin="5dp"
+        android:ems="10"
+        android:enabled="false"
+        android:hint="@string/assistant"
+        android:importantForAutofill="no"
+        android:inputType="textPersonName"
+        android:textColor="@android:color/black"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/driver_name" />
+
+    <TextView
+        android:id="@+id/assistant_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:ems="10"
+        android:enabled="false"
+        android:textColor="@android:color/black"
+        android:textSize="12sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/assistant" />
+
+    <EditText
         android:id="@+id/vehicle"
         android:layout_width="wrap_content"
         android:layout_height="50dp"
@@ -44,7 +70,7 @@
         android:inputType="textPersonName"
         android:textColor="@android:color/black"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/driver_name" />
+        app:layout_constraintTop_toBottomOf="@id/assistant_name" />
 
     <Button
         android:id="@+id/scan_cam"

@@ -10,6 +10,7 @@ import lombok.Data;
 public class ShipmentRequest {
     private String regionCode;
     private String driverCode;
+    private String assistantCode;
     private String vehicleCode;
     private String userId;
     private List<ShipmentRequestItem> requestItems;

@@ -128,4 +128,6 @@
     <string name="edit">Redaktə et</string>
     <string name="inventory_info">İnventar məlumatları</string>
     <string name="brand_not_selected">Brend seçilməyib</string>
+    <string name="assistant">Köməkçi</string>
+    <string name="assistant_code_incorrect">Köməkçi personal kodu düzgün deyil</string>
 </resources>

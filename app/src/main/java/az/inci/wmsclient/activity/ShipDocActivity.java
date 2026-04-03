@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -47,6 +48,8 @@ public class ShipDocActivity extends AppBaseActivity {
             intent.putExtra("mode", AppConfig.VIEW_MODE);
             intent.putExtra("driverCode", doc.getDriverCode());
             intent.putExtra("driverName", doc.getDriverName());
+            intent.putExtra("assistantCode", doc.getAssistantCode());
+            intent.putExtra("assistantName", doc.getAssistantName());
             intent.putExtra("vehicleCode", doc.getVehicleCode());
             startActivity(intent);
         });

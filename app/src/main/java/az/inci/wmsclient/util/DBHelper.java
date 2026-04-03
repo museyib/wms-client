@@ -11,11 +11,10 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -77,6 +76,8 @@ public class DBHelper extends SQLiteOpenHelper {
     public static final String VEHICLE_CODE = "VEHICLE_CODE";
     public static final String DRIVER_CODE = "DRIVER_CODE";
     public static final String DRIVER_NAME = "DRIVER_NAME";
+    public static final String ASSISTANT_CODE = "ASSISTANT_CODE";
+    public static final String ASSISTANT_NAME = "ASSISTANT_NAME";
     public static final String TRX_TYPE_ID = "TRX_TYPE_ID";
     public static final String PREV_TRX_ID = "PREV_TRX_ID";
     public static final String DISCOUNT = "DISCOUNT";
@@ -130,8 +131,8 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     private static void copyFile(File src, File dst) throws IOException {
-        try (InputStream in = new FileInputStream(src);
-             OutputStream out = new FileOutputStream(dst)) {
+        try (InputStream in = Files.newInputStream(src.toPath());
+             OutputStream out = Files.newOutputStream(dst.toPath())) {
 
             byte[] buffer = new byte[4096];
             int len;
@@ -340,46 +341,6 @@ public class DBHelper extends SQLiteOpenHelper {
         values.put(STATUS, 0);
 
         db.insert(PICK_TRX, null, values);
-    }
-
-    public List<Trx> getAllPickTrx() {
-        SQLiteDatabase db = getWritableDatabase();
-
-        List<Trx> trxList = new ArrayList<>();
-        String sql = "SELECT * FROM PICK_TRX";
-
-        try (Cursor cursor = db.rawQuery(sql, new String[]{})) {
-            while (cursor.moveToNext()) {
-                Trx trx = new Trx();
-                trx.setTrxId(cursor.getInt(0));
-                trx.setTrxNo(cursor.getString(1));
-                trx.setTrxDate(cursor.getString(2));
-                trx.setPickStatus(cursor.getString(3));
-                trx.setInvCode(cursor.getString(4));
-                trx.setInvName(cursor.getString(5));
-                trx.setInvBrand(cursor.getString(6));
-                trx.setBpName(cursor.getString(7));
-                trx.setSbeName(cursor.getString(8));
-                trx.setWhsCode(cursor.getString(9));
-                trx.setUom(cursor.getString(10));
-                trx.setUomFactor(cursor.getDouble(11));
-                trx.setQty(cursor.getDouble(12));
-                trx.setPickedQty(cursor.getDouble(13));
-                trx.setPickArea(cursor.getString(14));
-                trx.setPickGroup(cursor.getString(15));
-                trx.setPickUser(cursor.getString(16));
-                trx.setApproveUser(cursor.getString(17));
-                trx.setBarcode(cursor.getString(18));
-                trx.setPrevTrxNo(cursor.getString(19));
-                trx.setNotes(cursor.getString(20));
-                trx.setPriority(cursor.getInt(21));
-
-                if (!trxList.contains(trx)) {
-                    trxList.add(trx);
-                }
-            }
-        }
-        return trxList;
     }
 
     public List<Trx> getPickTrx(String trxNo) {
@@ -849,6 +810,8 @@ public class DBHelper extends SQLiteOpenHelper {
                 .append(REGION_CODE).append(" TEXT,")
                 .append(DRIVER_CODE).append(" TEXT,")
                 .append(DRIVER_NAME).append(" TEXT,")
+                .append(ASSISTANT_CODE).append(" TEXT,")
+                .append(ASSISTANT_NAME).append(" TEXT,")
                 .append(SRC_TRX_NO).append(" TEXT,")
                 .append(VEHICLE_CODE).append(" TEXT,")
                 .append(USER_ID).append(" TEXT,")
@@ -864,6 +827,8 @@ public class DBHelper extends SQLiteOpenHelper {
         values.put(REGION_CODE, shipTrx.getRegionCode());
         values.put(DRIVER_CODE, shipTrx.getDriverCode());
         values.put(DRIVER_NAME, shipTrx.getDriverName());
+        values.put(ASSISTANT_CODE, shipTrx.getAssistantCode());
+        values.put(ASSISTANT_NAME, shipTrx.getAssistantName());
         values.put(SRC_TRX_NO, shipTrx.getSrcTrxNo());
         values.put(VEHICLE_CODE, shipTrx.getVehicleCode());
         values.put(USER_ID, shipTrx.getUserId());
@@ -880,6 +845,8 @@ public class DBHelper extends SQLiteOpenHelper {
         try (Cursor cursor = db.rawQuery("SELECT REGION_CODE, " +
                         "DRIVER_CODE, " +
                         "DRIVER_NAME," +
+                        "ASSISTANT_CODE, " +
+                        "ASSISTANT_NAME," +
                         "VEHICLE_CODE," +
                         "USER_ID," +
                         "COUNT(*) " +
@@ -891,9 +858,11 @@ public class DBHelper extends SQLiteOpenHelper {
                 doc.setRegionCode(cursor.getString(0));
                 doc.setDriverCode(cursor.getString(1));
                 doc.setDriverName(cursor.getString(2));
-                doc.setVehicleCode(cursor.getString(3));
-                doc.setUserId(cursor.getString(4));
-                doc.setCount(cursor.getInt(5));
+                doc.setAssistantCode(cursor.getString(3));
+                doc.setAssistantName(cursor.getString(4));
+                doc.setVehicleCode(cursor.getString(5));
+                doc.setUserId(cursor.getString(6));
+                doc.setCount(cursor.getInt(7));
                 shipDocList.add(doc);
             }
         }
@@ -913,10 +882,12 @@ public class DBHelper extends SQLiteOpenHelper {
                 trx.setRegionCode(cursor.getString(0));
                 trx.setDriverCode(cursor.getString(1));
                 trx.setDriverName(cursor.getString(2));
-                trx.setSrcTrxNo(cursor.getString(3));
-                trx.setVehicleCode(cursor.getString(4));
-                trx.setUserId(cursor.getString(5));
-                trx.setTaxed(cursor.getInt(6) == 1);
+                trx.setAssistantCode(cursor.getString(3));
+                trx.setAssistantName(cursor.getString(4));
+                trx.setSrcTrxNo(cursor.getString(5));
+                trx.setVehicleCode(cursor.getString(6));
+                trx.setUserId(cursor.getString(7));
+                trx.setTaxed(cursor.getInt(8) == 1);
                 shipTrxList.add(trx);
             }
         }

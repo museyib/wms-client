@@ -11,6 +11,8 @@ public class ShipTrx {
     private String regionCode;
     private String driverCode;
     private String driverName;
+    private String assistantCode;
+    private String assistantName;
     private String srcTrxNo;
     private String vehicleCode;
     private String userId;

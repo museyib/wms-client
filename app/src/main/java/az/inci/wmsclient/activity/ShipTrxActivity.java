@@ -10,6 +10,7 @@ import static az.inci.wmsclient.util.UrlConstructor.createUrl;
 
 import android.app.AlertDialog;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -35,10 +36,14 @@ import az.inci.wmsclient.model.v3.ShipmentRequestItem;
 public class ShipTrxActivity extends ScannerSupportActivity {
     private String driverCode;
     private String driverName;
+    private String assistantCode;
+    private String assistantName;
     private String vehicleCode;
     private ListView trxListView;
     private EditText driverCodeEditText;
     private TextView driverNameText;
+    private EditText assistantCodeEditText;
+    private TextView assistantNameText;
     private EditText vehicleCodeEditText;
     private CheckBox toCentralCheck;
     private List<ShipTrx> trxList;
@@ -55,6 +60,8 @@ public class ShipTrxActivity extends ScannerSupportActivity {
 
         driverCodeEditText = findViewById(R.id.driver);
         driverNameText = findViewById(R.id.driver_name);
+        assistantCodeEditText = findViewById(R.id.assistant);
+        assistantNameText = findViewById(R.id.assistant_name);
         vehicleCodeEditText = findViewById(R.id.vehicle);
         trxListView = findViewById(R.id.ship_trx_list_view);
         toCentralCheck = findViewById(R.id.to_central_check);
@@ -94,9 +101,13 @@ public class ShipTrxActivity extends ScannerSupportActivity {
             docCreated = true;
             driverCode = getIntent().getStringExtra("driverCode");
             driverName = getIntent().getStringExtra("driverName");
+            assistantCode = getIntent().getStringExtra("assistantCode");
+            assistantName = getIntent().getStringExtra("assistantName");
             vehicleCode = getIntent().getStringExtra("vehicleCode");
             driverCodeEditText.setText(driverCode);
             driverNameText.setText(driverName);
+            assistantCodeEditText.setText(assistantCode);
+            assistantNameText.setText(assistantName);
             vehicleCodeEditText.setText(vehicleCode);
 
             loadData();
@@ -114,8 +125,12 @@ public class ShipTrxActivity extends ScannerSupportActivity {
         if (docCreated || checkModeOn)
             validateShipping(barcode);
         else {
-            if (barcode.startsWith("PER"))
-                setDriverCode(barcode);
+            if (barcode.startsWith("PER")) {
+                if (isEmpty(driverCode))
+                    setDriverCode(barcode);
+                else
+                    setAssistantCode(barcode);
+            }
             else
                 setVehicleCode(barcode);
 
@@ -166,6 +181,48 @@ public class ShipTrxActivity extends ScannerSupportActivity {
         }
     }
 
+    public void setAssistantCode(String assistantCode) {
+        if (assistantCode.startsWith("PER")) {
+            this.assistantCode = assistantCode;
+            showProgressDialog(true);
+            new Thread(() -> {
+                String url = createUrl("personnel", "get-name");
+                Map<String, String> parameters = new HashMap<>();
+                parameters.put("per-code", assistantCode);
+                url = addQueryParameters(url, parameters);
+                try {
+                    assistantName = httpClient.getSimpleObject(url, "GET", null, String.class);
+                    runOnUiThread(() -> {
+                        if (!isEmpty(assistantName)) {
+                            this.assistantCode = assistantCode;
+                            assistantCodeEditText.setText(assistantCode);
+                            assistantNameText.setText(assistantName);
+                            playSound(SOUND_SUCCESS);
+                        } else {
+                            showMessageDialog(getString(R.string.error),
+                                    getString(R.string.assistant_code_incorrect),
+                                    ic_dialog_alert);
+                            playSound(SOUND_FAIL);
+                        }
+                    });
+                } catch (CustomException e) {
+                    logger.logError(e.toString());
+                    runOnUiThread(() -> {
+                        showMessageDialog(getString(R.string.error), e.toString(),
+                                ic_dialog_alert);
+                        playSound(SOUND_FAIL);
+                    });
+                } finally {
+                    runOnUiThread(() -> showProgressDialog(false));
+                }
+            }).start();
+        } else {
+            showMessageDialog(getString(R.string.error), getString(R.string.assistant_code_incorrect),
+                    ic_dialog_alert);
+            playSound(SOUND_FAIL);
+        }
+    }
+
     public void setVehicleCode(String vehicleCode) {
         if (!vehicleCode.startsWith("PER")) {
             if (vehicleCode.startsWith("VHC"))
@@ -197,6 +254,8 @@ public class ShipTrxActivity extends ScannerSupportActivity {
         trx.setSrcTrxNo(trxNo);
         trx.setDriverCode(driverCode);
         trx.setDriverName(driverName);
+        trx.setAssistantCode(assistantCode);
+        trx.setAssistantName(assistantName);
         trx.setVehicleCode(vehicleCode);
         trx.setRegionCode("SHR0000001");
         trx.setUserId(appUser.getId());
@@ -290,6 +349,7 @@ public class ShipTrxActivity extends ScannerSupportActivity {
             ShipmentRequest request = ShipmentRequest.builder()
                     .regionCode(trxList.get(0).getRegionCode())
                     .driverCode(trxList.get(0).getDriverCode())
+                    .assistantCode(trxList.get(0).getAssistantCode())
                     .vehicleCode(trxList.get(0).getVehicleCode())
                     .userId(appUser.getId())
                     .build();
@@ -330,9 +390,13 @@ public class ShipTrxActivity extends ScannerSupportActivity {
     private void clearFields() {
         driverCode = "";
         driverName = "";
+        assistantCode = "";
+        assistantName = "";
         vehicleCode = "";
         driverCodeEditText.setText("");
         driverNameText.setText("");
+        assistantCodeEditText.setText("");
+        assistantNameText.setText("");
         vehicleCodeEditText.setText("");
         toCentralCheck.setChecked(false);
         toCentral = false;
